@@ -300,6 +300,22 @@ static void ipc_send_event(const char *json_string, enum ipc_command_type event)
 	}
 }
 
+void ipc_event_output(struct sway_output *old,
+		const char *change) {
+	if (!ipc_has_event_listeners(IPC_EVENT_OUTPUT)) {
+		return;
+	}
+	sway_log(SWAY_DEBUG, "Sending output::%s event", change);
+	json_object *obj = json_object_new_object();
+	json_object_object_add(obj, "change", json_object_new_string(change));
+	json_object_object_add(
+			obj, "container", ipc_json_describe_node(&old->node));
+
+	const char *json_string = json_object_to_json_string(obj);
+	ipc_send_event(json_string, IPC_EVENT_OUTPUT);
+	json_object_put(obj);
+}
+
 void ipc_event_workspace(struct sway_workspace *old,
 		struct sway_workspace *new, const char *change) {
 	if (!ipc_has_event_listeners(IPC_EVENT_WORKSPACE)) {
@@ -716,11 +732,14 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 			} else if (strcmp(event_type, "tick") == 0) {
 				client->subscribed_events |= event_mask(IPC_EVENT_TICK);
 				is_tick = true;
+			} else if (strcmp(event_type, "output") == 0) {
+				client->subscribed_events |= event_mask(IPC_EVENT_OUTPUT);
 			} else {
 				const char msg[] = "{\"success\": false}";
 				ipc_send_reply(client, payload_type, msg, strlen(msg));
 				json_object_put(request);
-				sway_log(SWAY_INFO, "Unsupported event type in subscribe request");
+				sway_log(SWAY_INFO,
+						"Unsupported event type in subscribe request");
 				goto exit_cleanup;
 			}
 		}

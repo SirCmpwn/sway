@@ -180,11 +180,12 @@ static void ipc_json_describe_output(struct sway_output *output,
 			ipc_json_output_transform_description(wlr_output->transform)));
 
 	struct sway_workspace *ws = output_get_active_workspace(output);
-	if (!sway_assert(ws, "Expected output to have a workspace")) {
-		return;
+	if (ws == NULL) {
+		json_object_object_add(object, "current_workspace", NULL);
+	} else {
+		json_object_object_add(object, "current_workspace",
+				json_object_new_string(ws->name));
 	}
-	json_object_object_add(object, "current_workspace",
-			json_object_new_string(ws->name));
 
 	json_object *modes_array = json_object_new_array();
 	struct wlr_output_mode *mode;

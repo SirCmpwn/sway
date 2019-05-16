@@ -20,6 +20,7 @@
 #include "sway/desktop/transaction.h"
 #include "sway/input/input-manager.h"
 #include "sway/input/seat.h"
+#include "sway/ipc-server.h"
 #include "sway/layers.h"
 #include "sway/output.h"
 #include "sway/server.h"
@@ -29,7 +30,8 @@
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
 
-struct sway_output *output_by_name_or_id(const char *name_or_id) {
+		struct sway_output *
+		output_by_name_or_id(const char *name_or_id) {
 	for (int i = 0; i < root->outputs->length; ++i) {
 		struct sway_output *output = root->outputs->items[i];
 		char identifier[128];
@@ -527,6 +529,7 @@ static void handle_destroy(struct wl_listener *listener, void *data) {
 	if (output->enabled) {
 		output_disable(output);
 	}
+	ipc_event_output(output, "destroy");
 	output_begin_destroy(output);
 
 	wl_list_remove(&output->destroy.link);
@@ -561,6 +564,7 @@ static void handle_mode(struct wl_listener *listener, void *data) {
 	arrange_layers(output);
 	arrange_output(output);
 	transaction_commit_dirty();
+	
 }
 
 static void handle_transform(struct wl_listener *listener, void *data) {
@@ -651,4 +655,5 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	}
 
 	transaction_commit_dirty();
+	ipc_event_output(output, "new");
 }
