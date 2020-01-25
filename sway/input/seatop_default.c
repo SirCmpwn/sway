@@ -21,6 +21,7 @@ struct seatop_default_event {
 	uint32_t pressed_buttons[SWAY_CURSOR_PRESSED_BUTTONS_CAP];
 	size_t pressed_button_count;
 	bool swiping;
+	uint8_t swipe_fingers;
 	double swipe_travel_x, swipe_travel_y;
 };
 
@@ -749,6 +750,16 @@ static void handle_pointer_axis(struct sway_seat *seat,
 	}
 }
 
+static uint32_t swipe_button_base(uint8_t fingers) {
+	if (fingers == 3) {
+		return SWAY_SWIPE_3;
+	} else if (fingers == 4) {
+		return SWAY_SWIPE_4;
+	}
+
+	return 0;
+}
+
 static void handle_swipe_begin(struct sway_seat *seat,
 		struct wlr_event_pointer_swipe_begin *event) {
 	struct sway_input_device *input_device =
@@ -778,6 +789,13 @@ static void handle_swipe_begin(struct sway_seat *seat,
 		input_device ? input_device->wlr_device : NULL;
 	char *dev_id = device ? input_device_get_identifier(device) : strdup("*");
 
+	// zero for both turns below loop into a no-op
+	uint32_t button_base = swipe_button_base(event->fingers);
+	uint32_t button_end = 0;
+	if (button_base != 0) {
+		button_end = button_base + SWAY_SWIPE_DIR_COUNT;
+	}
+
 	/**
 	 * Handle mouse bindings - if there's any swipe bindings for this
 	 * context. Here we must swallow all swipes if there's even one
@@ -789,8 +807,7 @@ static void handle_swipe_begin(struct sway_seat *seat,
 	 * is at least one binding.
 	 */
 	struct sway_binding *binding = NULL;
-	for (uint32_t button = SWAY_SWIPE_UP; button <= SWAY_SWIPE_RIGHT;
-			button++) {
+	for (uint32_t button = button_base; button < button_end; button++) {
 		state_add_button(e, button);
 		// check for an on-press binding
 		binding = get_active_mouse_binding(e,
@@ -816,6 +833,7 @@ static void handle_swipe_begin(struct sway_seat *seat,
 	if (handled) {
 		// mark this as ours and start tracking
 		e->swiping = true;
+		e->swipe_fingers = event->fingers;
 		e->swipe_travel_x = 0;
 		e->swipe_travel_y = 0;
 	}
@@ -834,6 +852,13 @@ static void handle_swipe_update(struct sway_seat *seat,
 
 	// is this ours?
 	if (e->swiping) {
+		// libinput does not do this. Instead the current swipe is
+		// cancelled and a new one started. But better be safe.
+		if (e->swipe_fingers != event->fingers) {
+			sway_log(SWAY_DEBUG, "Ignoring changed finger count mid-swipe");
+			return;
+		}
+
 		e->swipe_travel_x += event->dx;
 		e->swipe_travel_y += event->dy;
 		return;
@@ -847,11 +872,23 @@ static void handle_swipe_update(struct sway_seat *seat,
 }
 
 static uint32_t swipe_to_button(struct seatop_default_event *event) {
+	uint8_t direction;
 	if (fabs(event->swipe_travel_x) > fabs(event->swipe_travel_y)) {
-		return event->swipe_travel_x > 0 ? SWAY_SWIPE_RIGHT : SWAY_SWIPE_LEFT;
+		if (event->swipe_travel_x > 0) {
+			direction = SWAY_SWIPE_DIR_RIGHT;
+		} else {
+			direction = SWAY_SWIPE_DIR_LEFT;
+		}
+	} else {
+		if (event->swipe_travel_y > 0) {
+			direction = SWAY_SWIPE_DIR_DOWN;
+		} else {
+			direction = SWAY_SWIPE_DIR_UP;
+		}
 	}
 
-	return event->swipe_travel_y > 0 ? SWAY_SWIPE_DOWN : SWAY_SWIPE_UP;
+	uint32_t button_base = swipe_button_base(event->swipe_fingers);
+	return button_base + direction;
 }
 
 static void handle_swipe_end(struct sway_seat *seat,

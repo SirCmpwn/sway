@@ -1203,11 +1203,14 @@ uint32_t get_mouse_bindsym(const char *name, char **error) {
 			uint32_t button;
 			const char *dir;
 		} swipes[] = {
-			SWAY_SWIPE_UP, "UP",
-			SWAY_SWIPE_DOWN, "DOWN",
-			SWAY_SWIPE_LEFT, "LEFT",
-			SWAY_SWIPE_RIGHT, "RIGHT",
-			0, NULL,
+			SWAY_SWIPE_3 + SWAY_SWIPE_DIR_UP, "3_UP",
+			SWAY_SWIPE_3 + SWAY_SWIPE_DIR_DOWN, "3_DOWN",
+			SWAY_SWIPE_3 + SWAY_SWIPE_DIR_LEFT, "3_LEFT",
+			SWAY_SWIPE_3 + SWAY_SWIPE_DIR_RIGHT, "3_RIGHT",
+			SWAY_SWIPE_4 + SWAY_SWIPE_DIR_UP, "4_UP",
+			SWAY_SWIPE_4 + SWAY_SWIPE_DIR_DOWN, "4_DOWN",
+			SWAY_SWIPE_4 + SWAY_SWIPE_DIR_LEFT, "4_LEFT",
+			SWAY_SWIPE_4 + SWAY_SWIPE_DIR_RIGHT, "4_RIGHT", 0, NULL,
 		}, *sp;
 
 		const char *dir = &name[strlen("SWIPE_")];
@@ -1284,14 +1287,22 @@ const char *get_mouse_button_name(uint32_t button) {
 			name = "SWAY_SCROLL_LEFT";
 		} else if (button == SWAY_SCROLL_RIGHT) {
 			name = "SWAY_SCROLL_RIGHT";
-		} else if (button == SWAY_SWIPE_UP) {
-			name = "SWAY_SWIPE_UP";
-		} else if (button == SWAY_SWIPE_DOWN) {
-			name = "SWAY_SWIPE_DOWN";
-		} else if (button == SWAY_SWIPE_LEFT) {
-			name = "SWAY_SWIPE_LEFT";
-		} else if (button == SWAY_SWIPE_RIGHT) {
-			name = "SWAY_SWIPE_RIGHT";
+		} else if (button == SWAY_SWIPE_3 + SWAY_SWIPE_DIR_UP) {
+			name = "SWAY_SWIPE_3_UP";
+		} else if (button == SWAY_SWIPE_3 + SWAY_SWIPE_DIR_DOWN) {
+			name = "SWAY_SWIPE_3_DOWN";
+		} else if (button == SWAY_SWIPE_3 + SWAY_SWIPE_DIR_LEFT) {
+			name = "SWAY_SWIPE_3_LEFT";
+		} else if (button == SWAY_SWIPE_3 + SWAY_SWIPE_DIR_RIGHT) {
+			name = "SWAY_SWIPE_3_RIGHT";
+		} else if (button == SWAY_SWIPE_4 + SWAY_SWIPE_DIR_UP) {
+			name = "SWAY_SWIPE_4_UP";
+		} else if (button == SWAY_SWIPE_4 + SWAY_SWIPE_DIR_DOWN) {
+			name = "SWAY_SWIPE_4_DOWN";
+		} else if (button == SWAY_SWIPE_4 + SWAY_SWIPE_DIR_LEFT) {
+			name = "SWAY_SWIPE_4_LEFT";
+		} else if (button == SWAY_SWIPE_4 + SWAY_SWIPE_DIR_RIGHT) {
+			name = "SWAY_SWIPE_4_RIGHT";
 		}
 	}
 	return name;
