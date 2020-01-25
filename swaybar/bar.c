@@ -29,6 +29,7 @@
 #include "pool-buffer.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
+#include "pointer-gestures-unstable-v1-client-protocol.h"
 
 void free_workspaces(struct wl_list *list) {
 	struct swaybar_workspace *ws, *tmp;
@@ -367,6 +368,9 @@ static void handle_global(void *data, struct wl_registry *registry,
 	} else if (strcmp(interface, zxdg_output_manager_v1_interface.name) == 0) {
 		bar->xdg_output_manager = wl_registry_bind(registry, name,
 			&zxdg_output_manager_v1_interface, 2);
+	} else if (strcmp(interface, zwp_pointer_gestures_v1_interface.name) == 0) {
+		bar->pointer_gestures = wl_registry_bind(registry, name,
+			&zwp_pointer_gestures_v1_interface, 1);
 	}
 }
 
