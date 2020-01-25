@@ -747,6 +747,31 @@ static void handle_pointer_axis(struct sway_seat *seat,
 	}
 }
 
+static void handle_swipe_begin(struct sway_seat *seat,
+		struct wlr_event_pointer_swipe_begin *event) {
+	struct sway_cursor *cursor = seat->cursor;
+	wlr_pointer_gestures_v1_send_swipe_begin(
+			cursor->pointer_gestures, cursor->seat->wlr_seat,
+			event->time_msec, event->fingers);
+}
+
+static void handle_swipe_update(struct sway_seat *seat,
+		struct wlr_event_pointer_swipe_update *event) {
+	struct sway_cursor *cursor = seat->cursor;
+	wlr_pointer_gestures_v1_send_swipe_update(
+			cursor->pointer_gestures,
+			cursor->seat->wlr_seat,
+			event->time_msec, event->dx, event->dy);
+}
+
+static void handle_swipe_end(struct sway_seat *seat,
+		struct wlr_event_pointer_swipe_end *event) {
+	struct sway_cursor *cursor = seat->cursor;
+	wlr_pointer_gestures_v1_send_swipe_end(
+			cursor->pointer_gestures, cursor->seat->wlr_seat,
+			event->time_msec, event->cancelled);
+}
+
 /*----------------------------------\
  * Functions used by handle_rebase  /
  *--------------------------------*/
@@ -776,6 +801,9 @@ static const struct sway_seatop_impl seatop_impl = {
 	.pointer_axis = handle_pointer_axis,
 	.tablet_tool_tip = handle_tablet_tool_tip,
 	.tablet_tool_motion = handle_tablet_tool_motion,
+	.swipe_begin = handle_swipe_begin,
+	.swipe_update = handle_swipe_update,
+	.swipe_end = handle_swipe_end,
 	.rebase = handle_rebase,
 	.allow_set_cursor = true,
 };

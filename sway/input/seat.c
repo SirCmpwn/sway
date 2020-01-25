@@ -1576,6 +1576,27 @@ void seatop_tablet_tool_motion(struct sway_seat *seat,
 	}
 }
 
+void seatop_swipe_begin(struct sway_seat *seat,
+		struct wlr_event_pointer_swipe_begin *event) {
+	if (seat->seatop_impl->swipe_begin) {
+		seat->seatop_impl->swipe_begin(seat, event);
+	}
+}
+
+void seatop_swipe_update(struct sway_seat *seat,
+		struct wlr_event_pointer_swipe_update *event) {
+	if (seat->seatop_impl->swipe_update) {
+		seat->seatop_impl->swipe_update(seat, event);
+	}
+}
+
+void seatop_swipe_end(struct sway_seat *seat,
+		struct wlr_event_pointer_swipe_end *event) {
+	if (seat->seatop_impl->swipe_end) {
+		seat->seatop_impl->swipe_end(seat, event);
+	}
+}
+
 void seatop_rebase(struct sway_seat *seat, uint32_t time_msec) {
 	if (seat->seatop_impl->rebase) {
 		seat->seatop_impl->rebase(seat, time_msec);

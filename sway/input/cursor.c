@@ -937,27 +937,24 @@ static void handle_pointer_swipe_begin(struct wl_listener *listener, void *data)
 	struct sway_cursor *cursor = wl_container_of(
 			listener, cursor, swipe_begin);
 	struct wlr_event_pointer_swipe_begin *event = data;
-	wlr_pointer_gestures_v1_send_swipe_begin(
-			cursor->pointer_gestures, cursor->seat->wlr_seat,
-			event->time_msec, event->fingers);
+	cursor_handle_activity_from_device(cursor, event->device);
+	seatop_swipe_begin(cursor->seat, event);
 }
 
 static void handle_pointer_swipe_update(struct wl_listener *listener, void *data) {
 	struct sway_cursor *cursor = wl_container_of(
 			listener, cursor, swipe_update);
 	struct wlr_event_pointer_swipe_update *event = data;
-	wlr_pointer_gestures_v1_send_swipe_update(
-			cursor->pointer_gestures, cursor->seat->wlr_seat,
-			event->time_msec, event->dx, event->dy);
+	cursor_handle_activity_from_device(cursor, event->device);
+	seatop_swipe_update(cursor->seat, event);
 }
 
 static void handle_pointer_swipe_end(struct wl_listener *listener, void *data) {
 	struct sway_cursor *cursor = wl_container_of(
 			listener, cursor, swipe_end);
 	struct wlr_event_pointer_swipe_end *event = data;
-	wlr_pointer_gestures_v1_send_swipe_end(
-			cursor->pointer_gestures, cursor->seat->wlr_seat,
-			event->time_msec, event->cancelled);
+	cursor_handle_activity_from_device(cursor, event->device);
+	seatop_swipe_end(cursor->seat, event);
 }
 
 static void handle_image_surface_destroy(struct wl_listener *listener,
