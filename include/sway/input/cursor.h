@@ -14,6 +14,10 @@
 #define SWAY_SCROLL_DOWN KEY_MAX + 2
 #define SWAY_SCROLL_LEFT KEY_MAX + 3
 #define SWAY_SCROLL_RIGHT KEY_MAX + 4
+#define SWAY_SWIPE_UP KEY_MAX + 5
+#define SWAY_SWIPE_DOWN KEY_MAX + 6
+#define SWAY_SWIPE_LEFT KEY_MAX + 7
+#define SWAY_SWIPE_RIGHT KEY_MAX + 8
 
 struct sway_cursor {
 	struct sway_seat *seat;

@@ -1198,6 +1198,31 @@ uint32_t get_mouse_bindsym(const char *name, char **error) {
 			SWAY_SCROLL_UP, SWAY_SCROLL_DOWN, SWAY_SCROLL_LEFT,
 			SWAY_SCROLL_RIGHT, BTN_SIDE, BTN_EXTRA};
 		return buttons[number - 1];
+	} else if (strncmp(name, "SWIPE_", strlen("SWIPE_")) == 0) {
+		static const struct {
+			uint32_t button;
+			const char *dir;
+		} swipes[] = {
+			SWAY_SWIPE_UP, "UP",
+			SWAY_SWIPE_DOWN, "DOWN",
+			SWAY_SWIPE_LEFT, "LEFT",
+			SWAY_SWIPE_RIGHT, "RIGHT",
+			0, NULL,
+		}, *sp;
+
+		const char *dir = &name[strlen("SWIPE_")];
+		for (sp = swipes; sp->dir; sp++) {
+			if (strcmp(sp->dir, dir) == 0) {
+				break;
+			}
+		}
+
+		if (!sp->dir) {
+			*error = strdup("Unknown swipe type");
+			return 0;
+		}
+
+		return sp->button;
 	} else if (strncmp(name, "BTN_", strlen("BTN_")) == 0) {
 		// Get event code from name
 		int code = libevdev_event_code_from_name(EV_KEY, name);
@@ -1259,6 +1284,14 @@ const char *get_mouse_button_name(uint32_t button) {
 			name = "SWAY_SCROLL_LEFT";
 		} else if (button == SWAY_SCROLL_RIGHT) {
 			name = "SWAY_SCROLL_RIGHT";
+		} else if (button == SWAY_SWIPE_UP) {
+			name = "SWAY_SWIPE_UP";
+		} else if (button == SWAY_SWIPE_DOWN) {
+			name = "SWAY_SWIPE_DOWN";
+		} else if (button == SWAY_SWIPE_LEFT) {
+			name = "SWAY_SWIPE_LEFT";
+		} else if (button == SWAY_SWIPE_RIGHT) {
+			name = "SWAY_SWIPE_RIGHT";
 		}
 	}
 	return name;

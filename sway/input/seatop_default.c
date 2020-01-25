@@ -20,6 +20,8 @@ struct seatop_default_event {
 	struct sway_node *previous_node;
 	uint32_t pressed_buttons[SWAY_CURSOR_PRESSED_BUTTONS_CAP];
 	size_t pressed_button_count;
+	bool swiping;
+	double swipe_travel_x, swipe_travel_y;
 };
 
 /*-----------------------------------------\
@@ -749,14 +751,94 @@ static void handle_pointer_axis(struct sway_seat *seat,
 
 static void handle_swipe_begin(struct sway_seat *seat,
 		struct wlr_event_pointer_swipe_begin *event) {
+	struct sway_input_device *input_device =
+		event->device ? event->device->data : NULL;
 	struct sway_cursor *cursor = seat->cursor;
-	wlr_pointer_gestures_v1_send_swipe_begin(
-			cursor->pointer_gestures, cursor->seat->wlr_seat,
-			event->time_msec, event->fingers);
+	struct seatop_default_event *e = seat->seatop_data;
+
+	// Determine what's under the cursor
+	struct wlr_surface *surface = NULL;
+	double sx, sy;
+	struct sway_node *node = node_at_coords(seat,
+			cursor->cursor->x, cursor->cursor->y, &surface, &sx, &sy);
+	struct sway_container *cont = node && node->type == N_CONTAINER ?
+		node->sway_container : NULL;
+	enum wlr_edges edge = cont ? find_edge(cont, surface, cursor) : WLR_EDGE_NONE;
+	bool on_border = edge != WLR_EDGE_NONE;
+	bool on_titlebar = cont && !on_border && !surface;
+	bool on_contents = cont && !on_border && surface;
+	bool on_workspace = node && node->type == N_WORKSPACE;
+
+	bool handled = false;
+
+	// Gather information needed for mouse bindings
+	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat->wlr_seat);
+	uint32_t modifiers = keyboard ? wlr_keyboard_get_modifiers(keyboard) : 0;
+	struct wlr_input_device *device =
+		input_device ? input_device->wlr_device : NULL;
+	char *dev_id = device ? input_device_get_identifier(device) : strdup("*");
+
+	/**
+	 * Handle mouse bindings - if there's any swipe bindings for this
+	 * context. Here we must swallow all swipes if there's even one
+	 * possible binding because we have no way of knowing yet what kind of
+	 * swipe this is going to be. It's in the nature of the thing because
+	 * the user may turn a left into an upwards swipe mid-way. For the same
+	 * reason it makes no sense to execute any binding here. So we defer it
+	 * to swipe release. We can break as soon as it's confirmed that there
+	 * is at least one binding.
+	 */
+	struct sway_binding *binding = NULL;
+	for (uint32_t button = SWAY_SWIPE_UP; button <= SWAY_SWIPE_RIGHT;
+			button++) {
+		state_add_button(e, button);
+		// check for an on-press binding
+		binding = get_active_mouse_binding(e,
+				config->current_mode->mouse_bindings,
+				modifiers, false, on_titlebar, on_border,
+				on_contents, on_workspace, dev_id);
+		if (!binding) {
+			// see if there's an on-release binding instead
+			binding = get_active_mouse_binding(e,
+					config->current_mode->mouse_bindings,
+					modifiers, true, on_titlebar,
+					on_border, on_contents, on_workspace,
+					dev_id);
+		}
+
+		state_erase_button(e, button);
+		if (binding) {
+			handled = true;
+			break;
+		}
+	}
+
+	if (handled) {
+		// mark this as ours and start tracking
+		e->swiping = true;
+		e->swipe_travel_x = 0;
+		e->swipe_travel_y = 0;
+	}
+	free(dev_id);
+
+	if (!handled) {
+		wlr_pointer_gestures_v1_send_swipe_begin(
+				cursor->pointer_gestures, cursor->seat->wlr_seat,
+				event->time_msec, event->fingers);
+	}
 }
 
 static void handle_swipe_update(struct sway_seat *seat,
 		struct wlr_event_pointer_swipe_update *event) {
+	struct seatop_default_event *e = seat->seatop_data;
+
+	// is this ours?
+	if (e->swiping) {
+		e->swipe_travel_x += event->dx;
+		e->swipe_travel_y += event->dy;
+		return;
+	}
+
 	struct sway_cursor *cursor = seat->cursor;
 	wlr_pointer_gestures_v1_send_swipe_update(
 			cursor->pointer_gestures,
@@ -764,12 +846,82 @@ static void handle_swipe_update(struct sway_seat *seat,
 			event->time_msec, event->dx, event->dy);
 }
 
+static uint32_t swipe_to_button(struct seatop_default_event *event) {
+	if (fabs(event->swipe_travel_x) > fabs(event->swipe_travel_y)) {
+		return event->swipe_travel_x > 0 ? SWAY_SWIPE_RIGHT : SWAY_SWIPE_LEFT;
+	}
+
+	return event->swipe_travel_y > 0 ? SWAY_SWIPE_DOWN : SWAY_SWIPE_UP;
+}
+
 static void handle_swipe_end(struct sway_seat *seat,
 		struct wlr_event_pointer_swipe_end *event) {
 	struct sway_cursor *cursor = seat->cursor;
-	wlr_pointer_gestures_v1_send_swipe_end(
-			cursor->pointer_gestures, cursor->seat->wlr_seat,
-			event->time_msec, event->cancelled);
+	struct seatop_default_event *e = seat->seatop_data;
+
+	if (!e->swiping) {
+		wlr_pointer_gestures_v1_send_swipe_end(
+				cursor->pointer_gestures, cursor->seat->wlr_seat,
+				event->time_msec, event->cancelled);
+		return;
+	}
+
+	e->swiping = false;
+
+	// can happen when changing finger count mid-swipe or swiping off the
+	// tracking surface (touchpad)
+	if (event->cancelled) {
+		return;
+	}
+
+	struct sway_input_device *input_device =
+		event->device ? event->device->data : NULL;
+
+	// Determine what's under the cursor
+	struct wlr_surface *surface = NULL;
+	double sx, sy;
+	struct sway_node *node = node_at_coords(seat, cursor->cursor->x,
+			cursor->cursor->y, &surface, &sx, &sy);
+	struct sway_container *cont = node && node->type == N_CONTAINER ?
+		node->sway_container : NULL;
+	enum wlr_edges edge = cont ? find_edge(cont, surface, cursor) :
+		WLR_EDGE_NONE;
+	bool on_border = edge != WLR_EDGE_NONE;
+	bool on_titlebar = cont && !on_border && !surface;
+	bool on_contents = cont && !on_border && surface;
+	bool on_workspace = node && node->type == N_WORKSPACE;
+
+	// Gather information needed for mouse bindings
+	struct wlr_keyboard *keyboard =
+		wlr_seat_get_keyboard(seat->wlr_seat);
+	uint32_t modifiers = keyboard ?
+		wlr_keyboard_get_modifiers(keyboard) : 0;
+	struct wlr_input_device *device =
+		input_device ? input_device->wlr_device : NULL;
+	char *dev_id = device ? input_device_get_identifier(device) :
+		strdup("*");
+	uint32_t button = swipe_to_button(e);
+
+	// Prefer any on-press binding because we did not execute it on gesture
+	// start because we could not know what gesture it would become. Ignore
+	// on-release binding on success.
+	state_add_button(e, button);
+	struct sway_binding *binding = get_active_mouse_binding(e,
+			config->current_mode->mouse_bindings, modifiers, false,
+			on_titlebar, on_border, on_contents, on_workspace,
+			dev_id);
+	if (!binding) {
+		binding = get_active_mouse_binding(e,
+				config->current_mode->mouse_bindings,
+				modifiers, true, on_titlebar, on_border,
+				on_contents, on_workspace, dev_id);
+	}
+	state_erase_button(e, button);
+	if (binding) {
+		seat_execute_command(seat, binding);
+	}
+
+	free(dev_id);
 }
 
 /*----------------------------------\
