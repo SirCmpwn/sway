@@ -75,6 +75,7 @@ struct sway_view {
 	char *title_format;
 
 	bool using_csd;
+	bool failed_scan_out;
 
 	struct timespec urgent;
 	bool allow_request_urgent;

@@ -453,6 +453,10 @@ static bool scan_out_fullscreen_view(struct sway_output *output,
 		return false;
 	}
 
+	if (view->failed_scan_out) {
+		return false;
+	}
+
 	if (view->saved_buffer) {
 		return false;
 	}
@@ -502,9 +506,16 @@ static bool scan_out_fullscreen_view(struct sway_output *output,
 		wlr_output);
 
 	if (!wlr_output_attach_buffer(wlr_output, surface->buffer)) {
+		view->failed_scan_out = true;
 		return false;
 	}
-	return wlr_output_commit(wlr_output);
+
+	if (!wlr_output_commit(wlr_output)) {
+		view->failed_scan_out = true;
+		return false;
+	}
+
+	return true;
 }
 
 static int output_repaint_timer_handler(void *data) {
