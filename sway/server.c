@@ -11,6 +11,7 @@
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_data_control_v1.h>
+#include <wlr/types/wlr_drm_lease_v1.h>
 #include <wlr/types/wlr_export_dmabuf_v1.h>
 #include <wlr/types/wlr_gamma_control_v1.h>
 #include <wlr/types/wlr_gtk_primary_selection.h>
@@ -50,6 +51,14 @@ bool server_privileged_prepare(struct sway_server *server) {
 		return false;
 	}
 	return true;
+}
+
+static void handle_drm_lease_requested(
+		struct wl_listener *listener, void *data) {
+	/* We only offer non-desktop outputs, but in the future we might want to do
+	 * more logic here. */
+	struct wlr_drm_lease_request_v1 *req = data;
+	wlr_drm_lease_manager_v1_grant_lease_request(req->manager, req);
 }
 
 bool server_init(struct sway_server *server) {
@@ -142,6 +151,14 @@ bool server_init(struct sway_server *server) {
 		&server->output_power_manager_set_mode);
 	server->input_method = wlr_input_method_manager_v2_create(server->wl_display);
 	server->text_input = wlr_text_input_manager_v3_create(server->wl_display);
+
+	server->drm_lease_manager =
+		wlr_drm_lease_manager_v1_create(server->wl_display, server->backend);
+	if (server->drm_lease_manager) {
+		server->drm_lease_requested.notify = handle_drm_lease_requested;
+		wl_signal_add(&server->drm_lease_manager->events.lease_requested,
+				&server->drm_lease_requested);
+	}
 
 	wlr_export_dmabuf_manager_v1_create(server->wl_display);
 	wlr_screencopy_manager_v1_create(server->wl_display);

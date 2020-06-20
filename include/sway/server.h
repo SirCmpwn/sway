@@ -8,6 +8,7 @@
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_input_method_v2.h>
+#include <wlr/types/wlr_drm_lease_v1.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_output_management_v1.h>
 #include <wlr/types/wlr_output_power_management_v1.h>
@@ -68,6 +69,9 @@ struct sway_server {
 	struct wlr_xdg_decoration_manager_v1 *xdg_decoration_manager;
 	struct wl_listener xdg_decoration;
 	struct wl_list xdg_decorations; // sway_xdg_decoration::link
+
+	struct wlr_drm_lease_manager_v1 *drm_lease_manager;
+	struct wl_listener drm_lease_requested;
 
 	struct wlr_presentation *presentation;
 
