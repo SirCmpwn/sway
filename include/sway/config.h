@@ -294,6 +294,7 @@ struct workspace_config {
 
 struct bar_config {
 	char *swaybar_command;
+	char *swaybar_label;
 	struct wl_client *client;
 	struct wl_listener client_destroy;
 
@@ -454,6 +455,7 @@ enum xwayland_mode {
  */
 struct sway_config {
 	char *swaynag_command;
+	char *swaynag_label;
 	struct swaynag_instance swaynag_config_errors;
 	list_t *symbols;
 	list_t *modes;
@@ -493,6 +495,7 @@ struct sway_config {
 
 	// swaybg
 	char *swaybg_command;
+	char *swaybg_label;
 	struct wl_client *swaybg_client;
 	struct wl_listener swaybg_client_destroy;
 

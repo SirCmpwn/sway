@@ -161,6 +161,8 @@ void free_config(struct sway_config *config) {
 	free(config->font);
 	free(config->swaybg_command);
 	free(config->swaynag_command);
+	free(config->swaybg_label);
+	free(config->swaynag_label);
 	free((char *)config->current_config_path);
 	free((char *)config->current_config);
 	keysym_translation_state_destroy(config->keysym_translation_state);

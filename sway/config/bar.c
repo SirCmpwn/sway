@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <wordexp.h>
+#include "sway/client_label.h"
 #include "sway/config.h"
 #include "sway/input/keyboard.h"
 #include "sway/output.h"
@@ -37,6 +38,7 @@ void free_bar_config(struct bar_config *bar) {
 	free(bar->hidden_state);
 	free(bar->status_command);
 	free(bar->swaybar_command);
+	free(bar->swaybar_label);
 	free(bar->font);
 	free(bar->separator_symbol);
 	if (bar->bindings) {
@@ -203,6 +205,10 @@ static void invoke_swaybar(struct bar_config *bar) {
 	if (bar->client == NULL) {
 		sway_log_errno(SWAY_ERROR, "wl_client_create failed");
 		return;
+	}
+
+	if (bar->swaybar_label) {
+		wl_client_label_set(bar->client, strdup(bar->swaybar_label));
 	}
 
 	bar->client_destroy.notify = handle_swaybar_client_destroy;
