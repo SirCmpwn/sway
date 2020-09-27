@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <linux/input-event-codes.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <wayland-client.h>
 #include <wayland-cursor.h>
@@ -9,6 +10,10 @@
 #include "swaybar/config.h"
 #include "swaybar/input.h"
 #include "swaybar/ipc.h"
+
+#if HAVE_TRAY
+#include "swaybar/tray/menu.h"
+#endif
 
 void free_hotspots(struct wl_list *list) {
 	struct swaybar_hotspot *hotspot, *tmp;
@@ -99,6 +104,11 @@ void update_cursor(struct swaybar_seat *seat) {
 static void wl_pointer_enter(void *data, struct wl_pointer *wl_pointer,
 		uint32_t serial, struct wl_surface *surface,
 		wl_fixed_t surface_x, wl_fixed_t surface_y) {
+#if HAVE_TRAY
+	if (popup_pointer_enter(data, wl_pointer, serial, surface, surface_x, surface_y)) {
+		return;
+	}
+#endif
 	struct swaybar_seat *seat = data;
 	struct swaybar_pointer *pointer = &seat->pointer;
 	seat->pointer.x = wl_fixed_to_double(surface_x);
@@ -116,6 +126,11 @@ static void wl_pointer_enter(void *data, struct wl_pointer *wl_pointer,
 
 static void wl_pointer_leave(void *data, struct wl_pointer *wl_pointer,
 		uint32_t serial, struct wl_surface *surface) {
+#if HAVE_TRAY
+	if (popup_pointer_leave(data, wl_pointer, serial, surface)) {
+		return;
+	}
+#endif
 	struct swaybar_seat *seat = data;
 	seat->pointer.current = NULL;
 }
@@ -125,6 +140,11 @@ static void wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
 	struct swaybar_seat *seat = data;
 	seat->pointer.x = wl_fixed_to_double(surface_x);
 	seat->pointer.y = wl_fixed_to_double(surface_y);
+#if HAVE_TRAY
+	if (popup_pointer_motion(data, wl_pointer, time, surface_x, surface_y)) {
+		return;
+	}
+#endif
 }
 
 static bool check_bindings(struct swaybar *bar, uint32_t button,
@@ -140,7 +160,7 @@ static bool check_bindings(struct swaybar *bar, uint32_t button,
 	return false;
 }
 
-static bool process_hotspots(struct swaybar_output *output,
+static bool process_hotspots(struct swaybar_output *output, struct wl_seat *seat, uint32_t serial,
 		double x, double y, uint32_t button) {
 	double px = x * output->scale;
 	double py = y * output->scale;
@@ -149,8 +169,8 @@ static bool process_hotspots(struct swaybar_output *output,
 		if (px >= hotspot->x && py >= hotspot->y
 				&& px < hotspot->x + hotspot->width
 				&& py < hotspot->y + hotspot->height) {
-			if (HOTSPOT_IGNORE == hotspot->callback(output, hotspot, x, y,
-					button, hotspot->data)) {
+			if (HOTSPOT_IGNORE == hotspot->callback(output, hotspot, seat, serial,
+						x, y, button, hotspot->data)) {
 				return true;
 			}
 		}
@@ -161,6 +181,12 @@ static bool process_hotspots(struct swaybar_output *output,
 
 static void wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
 		uint32_t serial, uint32_t time, uint32_t button, uint32_t state) {
+#if HAVE_TRAY
+	if (popup_pointer_button(data, wl_pointer, serial, time, button, state)) {
+		return;
+	}
+#endif
+
 	struct swaybar_seat *seat = data;
 	struct swaybar_pointer *pointer = &seat->pointer;
 	struct swaybar_output *output = pointer->current;
@@ -175,7 +201,7 @@ static void wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
 	if (state != WL_POINTER_BUTTON_STATE_PRESSED) {
 		return;
 	}
-	process_hotspots(output, pointer->x, pointer->y, button);
+	process_hotspots(output, seat->wl_seat, serial, pointer->x, pointer->y, button);
 }
 
 static void workspace_next(struct swaybar *bar, struct swaybar_output *output,
@@ -232,7 +258,7 @@ static void process_discrete_scroll(struct swaybar_seat *seat,
 		return;
 	}
 
-	if (process_hotspots(output, pointer->x, pointer->y, button)) {
+	if (process_hotspots(output, seat->wl_seat, 0, pointer->x, pointer->y, button)) {
 		return;
 	}
 
@@ -271,6 +297,12 @@ static void process_continuous_scroll(struct swaybar_seat *seat,
 
 static void wl_pointer_axis(void *data, struct wl_pointer *wl_pointer,
 		uint32_t time, uint32_t axis, wl_fixed_t value) {
+#if HAVE_TRAY
+	if (popup_pointer_axis(data, wl_pointer, time, axis, value)) {
+		return;
+	}
+#endif
+
 	struct swaybar_seat *seat = data;
 	struct swaybar_pointer *pointer = &seat->pointer;
 	struct swaybar_output *output = pointer->current;
@@ -373,6 +405,7 @@ static struct touch_slot *get_touch_slot(struct swaybar_touch *touch, int32_t id
 static void wl_touch_down(void *data, struct wl_touch *wl_touch,
 		uint32_t serial, uint32_t time, struct wl_surface *surface,
 		int32_t id, wl_fixed_t _x, wl_fixed_t _y) {
+	// TODO popup
 	struct swaybar_seat *seat = data;
 	struct swaybar_output *_output = NULL, *output = NULL;
 	wl_list_for_each(_output, &seat->bar->outputs, link) {
@@ -405,7 +438,7 @@ static void wl_touch_up(void *data, struct wl_touch *wl_touch,
 	}
 	if (time - slot->time < 500) {
 		// Tap, treat it like a pointer click
-		process_hotspots(slot->output, slot->x, slot->y, BTN_LEFT);
+		process_hotspots(slot->output, seat->wl_seat, serial, slot->x, slot->y, BTN_LEFT);
 	}
 	slot->output = NULL;
 }
