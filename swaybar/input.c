@@ -405,7 +405,12 @@ static struct touch_slot *get_touch_slot(struct swaybar_touch *touch, int32_t id
 static void wl_touch_down(void *data, struct wl_touch *wl_touch,
 		uint32_t serial, uint32_t time, struct wl_surface *surface,
 		int32_t id, wl_fixed_t _x, wl_fixed_t _y) {
-	// TODO popup
+#if HAVE_TRAY
+	if (popup_touch_down(data, wl_touch, serial, time, surface, id, _x, _y)) {
+		return;
+	}
+#endif
+
 	struct swaybar_seat *seat = data;
 	struct swaybar_output *_output = NULL, *output = NULL;
 	wl_list_for_each(_output, &seat->bar->outputs, link) {

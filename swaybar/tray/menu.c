@@ -810,6 +810,18 @@ void open_popup(struct swaybar_sni *sni, struct swaybar_output *output,
 
 // input hooks
 
+static struct swaybar_popup_surface *popup_find_surface(struct swaybar_popup *popup,
+		struct wl_surface *surface) {
+	struct swaybar_popup_surface *popup_surface = popup->popup_surface;
+	while (popup_surface) {
+		if (popup_surface->surface == surface) {
+			return popup_surface;
+		}
+		popup_surface = popup_surface->child;
+	}
+	return NULL;
+}
+
 bool popup_pointer_enter(void *data, struct wl_pointer *wl_pointer,
 		uint32_t serial, struct wl_surface *surface,
 		wl_fixed_t surface_x, wl_fixed_t surface_y) {
@@ -820,20 +832,16 @@ bool popup_pointer_enter(void *data, struct wl_pointer *wl_pointer,
 	}
 
 	struct swaybar_popup *popup = tray->popup;
-	struct swaybar_popup_surface *popup_surface = popup->popup_surface;
-	while (popup_surface) {
-		if (popup_surface->surface == surface) {
-			struct swaybar_pointer *pointer = &seat->pointer;
-			pointer->current = popup->output;
-			pointer->serial = serial;
-			update_cursor(seat);
+	struct swaybar_popup_surface *popup_surface = popup_find_surface(popup, surface);
+	if (popup_surface) {
+		struct swaybar_pointer *pointer = &seat->pointer;
+		pointer->current = popup->output;
+		pointer->serial = serial;
+		update_cursor(seat);
 
-			popup->pointer_focus = popup_surface;
-			return true;
-		}
-		popup_surface = popup_surface->child;
+		popup->pointer_focus = popup_surface;
 	}
-	return false;
+	return popup_surface;
 }
 
 bool popup_pointer_leave(void *data, struct wl_pointer *wl_pointer,
@@ -950,3 +958,17 @@ bool popup_pointer_axis(void *data, struct wl_pointer *wl_pointer,
 	}
 	return tray->popup->pointer_focus;
 }
+
+bool popup_touch_down(void *data, struct wl_touch *wl_touch, uint32_t serial,
+		uint32_t time, struct wl_surface *surface, int32_t id, wl_fixed_t _x,
+		wl_fixed_t _y) {
+	struct swaybar_seat *seat = data;
+	struct swaybar_tray *tray = seat->bar->tray;
+	if (!(tray && tray->popup)) {
+		return false;
+	}
+
+	struct swaybar_popup_surface *popup_surface = popup_find_surface(tray->popup, surface);
+	return popup_surface;
+}
+

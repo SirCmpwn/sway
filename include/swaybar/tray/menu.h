@@ -99,4 +99,8 @@ bool popup_pointer_button(void *data, struct wl_pointer *wl_pointer,
 bool popup_pointer_axis(void *data, struct wl_pointer *wl_pointer,
 		uint32_t time, uint32_t axis, wl_fixed_t value);
 
+bool popup_touch_down(void *data, struct wl_touch *wl_touch, uint32_t serial,
+		uint32_t time, struct wl_surface *surface, int32_t id, wl_fixed_t _x,
+		wl_fixed_t _y);
+
 #endif
