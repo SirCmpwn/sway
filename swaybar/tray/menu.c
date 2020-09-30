@@ -933,6 +933,7 @@ bool popup_pointer_button(void *data, struct wl_pointer *wl_pointer,
 					} else {
 						popup->y = hotspot->y;
 					}
+					popup->y /= popup->output->scale;
 					open_popup_id(sni, item->id);
 				} else {
 					sd_bus_call_method_async(tray->bus, NULL, sni->service,
