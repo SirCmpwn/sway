@@ -54,6 +54,7 @@ static struct cmd_handler handlers[] = {
 	{ "client.placeholder", cmd_client_noop },
 	{ "client.unfocused", cmd_client_unfocused },
 	{ "client.urgent", cmd_client_urgent },
+	{ "color", cmd_color },
 	{ "default_border", cmd_default_border },
 	{ "default_floating_border", cmd_default_floating_border },
 	{ "exec", cmd_exec },

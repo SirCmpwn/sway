@@ -123,6 +123,10 @@ void merge_output_config(struct output_config *dst, struct output_config *src) {
 	if (src->dpms_state != 0) {
 		dst->dpms_state = src->dpms_state;
 	}
+	if (src->color) {
+		wlr_color_config_free(dst->color);
+		dst->color = wlr_color_config_copy(src->color);
+	}
 }
 
 static void merge_wildcard_on_all(struct output_config *wildcard) {
@@ -476,6 +480,11 @@ bool apply_output_config(struct output_config *oc, struct sway_output *output) {
 		output->max_render_time = oc->max_render_time;
 	}
 
+	if(oc) {
+		wlr_color_config_free(wlr_output->color);
+		wlr_output->color = wlr_color_config_copy(oc->color);
+	}
+
 	// Reconfigure all devices, since input config may have been applied before
 	// this output came online, and some config items (like map_to_output) are
 	// dependent on an output being present.
@@ -659,6 +668,7 @@ void free_output_config(struct output_config *oc) {
 	free(oc->name);
 	free(oc->background);
 	free(oc->background_option);
+	wlr_color_config_free(oc->color);
 	free(oc);
 }
 

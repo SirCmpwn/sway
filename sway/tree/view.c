@@ -62,6 +62,7 @@ void view_destroy(struct sway_view *view) {
 	list_free(view->executed_criteria);
 
 	free(view->title_format);
+	wlr_color_config_free(view->color);
 
 	if (view->impl->destroy) {
 		view->impl->destroy(view);

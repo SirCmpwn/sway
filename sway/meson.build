@@ -44,6 +44,7 @@ sway_sources = files(
 	'commands/bind.c',
 	'commands/border.c',
 	'commands/client.c',
+	'commands/color.c',
 	'commands/create_output.c',
 	'commands/default_border.c',
 	'commands/default_floating_border.c',
@@ -180,6 +181,7 @@ sway_sources = files(
 
 	'commands/output/adaptive_sync.c',
 	'commands/output/background.c',
+	'commands/output/color.c',
 	'commands/output/disable.c',
 	'commands/output/dpms.c',
 	'commands/output/enable.c',

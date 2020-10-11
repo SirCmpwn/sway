@@ -10,6 +10,7 @@ static struct cmd_handler output_handlers[] = {
 	{ "adaptive_sync", output_cmd_adaptive_sync },
 	{ "background", output_cmd_background },
 	{ "bg", output_cmd_background },
+	{ "color", output_cmd_color },
 	{ "disable", output_cmd_disable },
 	{ "dpms", output_cmd_dpms },
 	{ "enable", output_cmd_enable },

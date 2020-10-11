@@ -116,6 +116,7 @@ sway_cmd cmd_client_unfocused;
 sway_cmd cmd_client_urgent;
 sway_cmd cmd_client_placeholder;
 sway_cmd cmd_client_background;
+sway_cmd cmd_color;
 sway_cmd cmd_commands;
 sway_cmd cmd_create_output;
 sway_cmd cmd_default_border;
@@ -276,6 +277,7 @@ sway_cmd input_cmd_xkb_variant;
 
 sway_cmd output_cmd_adaptive_sync;
 sway_cmd output_cmd_background;
+sway_cmd output_cmd_color;
 sway_cmd output_cmd_disable;
 sway_cmd output_cmd_dpms;
 sway_cmd output_cmd_enable;

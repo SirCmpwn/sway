@@ -4,6 +4,8 @@
 #include <sys/types.h>
 #include <wlr/types/wlr_box.h>
 #include <wlr/types/wlr_surface.h>
+#include <wlr/types/wlr_surface.h>
+#include <wlr/render/color.h>
 #include "list.h"
 #include "sway/tree/node.h"
 

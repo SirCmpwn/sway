@@ -261,6 +261,10 @@ static void render_view_toplevels(struct sway_view *view,
 		output->lx - view->geometry.x;
 	double oy = view->container->surface_y -
 		output->ly - view->geometry.y;
+
+	// override color config for surface
+	view->surface->color = view->color;
+
 	output_surface_for_each_surface(output, view->surface, ox, oy,
 			render_surface_iterator, &data);
 }
@@ -282,6 +286,10 @@ static void render_view_popups(struct sway_view *view,
 		.damage = damage,
 		.alpha = alpha,
 	};
+	
+	// override color config for surface
+	view->surface->color = view->color;
+
 	output_view_for_each_popup(output, view, render_popup_iterator, &data);
 }
 
@@ -1008,6 +1016,7 @@ void output_render(struct sway_output *output, struct timespec *when,
 	}
 
 	wlr_renderer_begin(renderer, wlr_output->width, wlr_output->height);
+	wlr_renderer_color_config(renderer, wlr_output->color);
 
 	if (!pixman_region32_not_empty(damage)) {
 		// Output isn't damaged but needs buffer swap

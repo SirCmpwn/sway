@@ -6,6 +6,7 @@
 #include <time.h>
 #include <wlr/interfaces/wlr_switch.h>
 #include <wlr/types/wlr_box.h>
+#include <wlr/render/color.h>
 #include <xkbcommon/xkbcommon.h>
 #include "../include/config.h"
 #include "list.h"
@@ -253,6 +254,7 @@ struct output_config {
 	char *background_option;
 	char *background_fallback;
 	enum config_dpms dpms_state;
+	struct wlr_color_config *color;
 };
 
 /**

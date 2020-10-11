@@ -5,6 +5,7 @@
 #include <wayland-server-core.h>
 #include <wlr/types/wlr_box.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/render/color.h>
 #include "config.h"
 #include "sway/tree/node.h"
 #include "sway/tree/view.h"

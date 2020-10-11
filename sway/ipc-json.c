@@ -308,6 +308,10 @@ static void ipc_json_describe_output(struct sway_output *output,
 	}
 
 	json_object_object_add(object, "max_render_time", json_object_new_int(output->max_render_time));
+
+	if(wlr_output->color) {
+		json_object_object_add(object, "icc_profile", json_object_new_string(wlr_output->color->icc_profile_path));
+	}
 }
 
 json_object *ipc_json_describe_disabled_output(struct sway_output *output) {
@@ -506,6 +510,10 @@ static void ipc_json_describe_view(struct sway_container *c, json_object *object
 	json_object_object_add(object, "geometry", ipc_json_create_rect(&geometry));
 
 	json_object_object_add(object, "max_render_time", json_object_new_int(c->view->max_render_time));
+	
+	json_object_object_add(object, "icc_profile", c->view->color
+			? json_object_new_string(c->view->color->icc_profile_path)
+			: NULL);
 
 	json_object_object_add(object, "shell", json_object_new_string(view_get_shell(c->view)));
 
