@@ -291,7 +291,7 @@ static int handle_layout_updated(sd_bus_message *msg, void *data,
 	return 0;
 }
 
-static int handle_item_properties_updated(sd_bus_message *msg, void *data,
+static int handle_items_properties_updated(sd_bus_message *msg, void *data,
 		sd_bus_error *error) {
 	struct swaybar_sni *sni = data;
 	sway_log(SWAY_DEBUG, "%s%s item properties updated", sni->service, sni->menu_path);
@@ -401,7 +401,7 @@ static void setup_menu(struct swaybar_sni *sni) {
 		free(slot);
 	}
 
-	sni_menu_match_signal_async(sni, "ItemPropertiesUpdated", handle_item_properties_updated);
+	sni_menu_match_signal_async(sni, "ItemsPropertiesUpdated", handle_items_properties_updated);
 	sni_menu_match_signal_async(sni, "LayoutUpdated", handle_layout_updated);
 	sni_menu_match_signal_async(sni, "ItemActivationRequested", handle_item_activation_requested);
 
