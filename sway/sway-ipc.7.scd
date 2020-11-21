@@ -1007,7 +1007,7 @@ An object containing the following properties:
 }
 ```
 
-## 8. GET_BINDING_MODES
+## 8. GET_BINDING_MODES (WITHOUT A PAYLOAD)
 
 *MESSAGE*++
 Retrieve the list of binding modes that currently configured
@@ -1023,6 +1023,286 @@ default binding mode
 	"default",
 	"resize",
 ]
+```
+
+## 8. GET_BINDING_MODES (WITH A PAYLOAD)
+
+*MESSAGE*++
+When sent with a mode name as the payload, this retrieves the list of keybinds
+configured for that mode.
+
+*REPLY*++
+An object that represents the configuration for the mode with the name sent as
+the payload. It has the following properties:
+
+
+[- *PROPERTY*
+:- *DATA TYPE*
+:- *DESCRIPTION*
+|- name
+:  string
+:[ The mode name
+|- bindings
+:  array
+:  The list of keybinds for the mode
+
+The objects in the keybind list describe one keybind each, and have the
+following properties:
+
+[- *PROPERTY*
+:- *DATA TYPE*
+:- *DESCRIPTION*
+|- type
+:  string
+:[ The type of this keybind.
+|- command
+:  string
+:  The sway command that is configured to run for this binding.
+|- flags
+:  array
+:  Flags describing special properties of this binding.
+
+Bindings of type *keysym*, *keycode*, *mousesym*, and *mousecode* have these
+properties:
+
+[- *PROPERTY*
+:- *DATA TYPE*
+:- *DESCRIPTION*
+|  modifiers
+:  array
+:[ The modifier keys that are configured for this binding
+|- input_codes
+:  array
+:  For code keybinds, the keycodes or mousecodes that are configured for this
+   binding
+|- input_code
+:  integer
+:  The first value of input_codes, or 0 if it is empty. For i3 compatibility.
+|- symbols
+:  array
+:  For symbol keybinds, the keysyms or mouse buttons that are configured for
+   this binding.
+|- symbol
+:  string
+:  The first value of symbols, or null if it is empty. For i3 compatiblity.
+|- input_type
+:  string
+:  Has the value *keyboard* or *mouse* if the binding is a keysym/keycode or
+   mousesym/mousecode binding respectively.
+|- input_device
+:  string
+:  The input identifier of devices that may trigger this binding.
+
+And bindings of type *lid* have these properties:
+
+[- *PROPERTY*
+:- *DATA TYPE*
+:- *DESCRIPTION*
+|- state
+:  string
+:[ The lid state which triggers this bindings.
+
+The *flags* property has these values
+
+[- *FLAG*
+:- *DESCRIPTION*
+|- release
+:[ The binding will run when the keycombo is released
+|- locked
+:  The binding will run even if a screen locking program is active
+|- border
+:  Mouse only. The binding will run when the cursor is over the window border.
+|- contents
+:  Mouse only. The binding will run when the cursor is over the window content.
+|- titlebar
+:  Mouse only. The binding will run when the cursor is over the window titlebar.
+|- code
+:  The code binding was converted from a keysym.
+|- reload
+:  Switch only. The binding will also execute on config reload.
+|- inhibited
+:  The binding will ignore shortcut inhibitors.
+|- norepeat
+:  The binding will not run when repeating a held key.
+
+
+*Example Reply:*
+```
+{
+  "name": "resize",
+  "bindings": [
+    {
+      "command": "resize shrink width 10px",
+      "modifiers": [
+      ],
+      "flags": [
+      ],
+      "type": "keysym",
+      "input_codes": [
+      ],
+      "input_code": 0,
+      "symbols": [
+        "h"
+      ],
+      "symbol": "h",
+      "input_type": "keyboard",
+      "input_device": "*"
+    },
+    {
+      "command": "resize grow height 10px",
+      "modifiers": [
+      ],
+      "flags": [
+      ],
+      "type": "keysym",
+      "input_codes": [
+      ],
+      "input_code": 0,
+      "symbols": [
+        "j"
+      ],
+      "symbol": "j",
+      "input_type": "keyboard",
+      "input_device": "*"
+    },
+    {
+      "command": "resize shrink height 10px",
+      "modifiers": [
+      ],
+      "flags": [
+      ],
+      "type": "keysym",
+      "input_codes": [
+      ],
+      "input_code": 0,
+      "symbols": [
+        "k"
+      ],
+      "symbol": "k",
+      "input_type": "keyboard",
+      "input_device": "*"
+    },
+    {
+      "command": "resize grow width 10px",
+      "modifiers": [
+      ],
+      "flags": [
+      ],
+      "type": "keysym",
+      "input_codes": [
+      ],
+      "input_code": 0,
+      "symbols": [
+        "l"
+      ],
+      "symbol": "l",
+      "input_type": "keyboard",
+      "input_device": "*"
+    },
+    {
+      "command": "resize shrink width 10px",
+      "modifiers": [
+      ],
+      "flags": [
+      ],
+      "type": "keysym",
+      "input_codes": [
+      ],
+      "input_code": 0,
+      "symbols": [
+        "Left"
+      ],
+      "symbol": "Left",
+      "input_type": "keyboard",
+      "input_device": "*"
+    },
+    {
+      "command": "resize grow height 10px",
+      "modifiers": [
+      ],
+      "flags": [
+      ],
+      "type": "keysym",
+      "input_codes": [
+      ],
+      "input_code": 0,
+      "symbols": [
+        "Down"
+      ],
+      "symbol": "Down",
+      "input_type": "keyboard",
+      "input_device": "*"
+    },
+    {
+      "command": "resize shrink height 10px",
+      "modifiers": [
+      ],
+      "flags": [
+      ],
+      "type": "keysym",
+      "input_codes": [
+      ],
+      "input_code": 0,
+      "symbols": [
+        "Up"
+      ],
+      "symbol": "Up",
+      "input_type": "keyboard",
+      "input_device": "*"
+    },
+    {
+      "command": "resize grow width 10px",
+      "modifiers": [
+      ],
+      "flags": [
+      ],
+      "type": "keysym",
+      "input_codes": [
+      ],
+      "input_code": 0,
+      "symbols": [
+        "Right"
+      ],
+      "symbol": "Right",
+      "input_type": "keyboard",
+      "input_device": "*"
+    },
+    {
+      "command": "mode \"default\"",
+      "modifiers": [
+      ],
+      "flags": [
+      ],
+      "type": "keysym",
+      "input_codes": [
+      ],
+      "input_code": 0,
+      "symbols": [
+        "Return"
+      ],
+      "symbol": "Return",
+      "input_type": "keyboard",
+      "input_device": "*"
+    },
+    {
+      "command": "mode \"default\"",
+      "modifiers": [
+      ],
+      "flags": [
+      ],
+      "type": "keysym",
+      "input_codes": [
+      ],
+      "input_code": 0,
+      "symbols": [
+        "Escape"
+      ],
+      "symbol": "Escape",
+      "input_type": "keyboard",
+      "input_device": "*"
+    }
+  ]
+}
 ```
 
 ## 9. GET_CONFIG
