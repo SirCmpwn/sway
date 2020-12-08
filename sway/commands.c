@@ -82,6 +82,7 @@ static const struct cmd_handler handlers[] = {
 	{ "popup_during_fullscreen", cmd_popup_during_fullscreen },
 	{ "sandbox_socket", cmd_sandbox_socket },
 	{ "seat", cmd_seat },
+	{ "security_label", cmd_security_label },
 	{ "set", cmd_set },
 	{ "show_marks", cmd_show_marks },
 	{ "smart_borders", cmd_smart_borders },

@@ -85,6 +85,11 @@ static void free_mode(struct sway_mode *mode) {
 	free(mode);
 }
 
+static void free_security_config(struct security_config *cfg) {
+	free(cfg->name);
+	free(cfg);
+}
+
 void free_config(struct sway_config *config) {
 	if (!config) {
 		return;
@@ -150,6 +155,12 @@ void free_config(struct sway_config *config) {
 			criteria_destroy(config->criteria->items[i]);
 		}
 		list_free(config->criteria);
+	}
+	if (config->security_configs) {
+		for (int i = 0; i < config->security_configs->length; ++i) {
+			free_security_config(config->security_configs->items[i]);
+		}
+		list_free(config->security_configs);
 	}
 	list_free(config->no_focus);
 	list_free(config->active_bar_modifiers);

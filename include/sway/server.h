@@ -37,6 +37,7 @@ struct sway_server {
 	struct wl_listener compositor_new_surface;
 
 	struct wlr_data_device_manager *data_device_manager;
+	struct wlr_gamma_control_manager_v1 *gamma_control_manager;
 
 	struct sway_input_manager *input;
 
@@ -84,6 +85,10 @@ struct sway_server {
 	struct wlr_input_method_manager_v2 *input_method;
 	struct wlr_text_input_manager_v3 *text_input;
 	struct wlr_foreign_toplevel_manager_v1 *foreign_toplevel_manager;
+
+	struct wlr_export_dmabuf_manager_v1 *dmabuf_manager;
+	struct wlr_screencopy_manager_v1 *screencopy_manager;
+	struct wlr_data_control_manager_v1 *data_control_manager;
 
 	size_t txn_timeout_ms;
 	list_t *transactions;

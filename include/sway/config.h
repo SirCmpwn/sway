@@ -13,6 +13,7 @@
 #include "swaynag.h"
 #include "tree/container.h"
 #include "sway/input/tablet.h"
+#include "sway/security.h"
 #include "sway/tree/root.h"
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 
@@ -271,6 +272,11 @@ struct output_config {
 	enum config_dpms dpms_state;
 };
 
+struct security_config {
+	char* name;
+	security_perm_mask_t permitted;
+};
+
 /**
  * Stores size of gaps for each side
  */
@@ -469,6 +475,7 @@ struct sway_config {
 	list_t *criteria;
 	list_t *no_focus;
 	list_t *active_bar_modifiers;
+	list_t *security_configs;
 	struct sway_mode *current_mode;
 	struct bar_config *current_bar;
 	uint32_t floating_mod;
