@@ -11,14 +11,13 @@
 #include "swaybar/tray/host.h"
 #include "swaybar/tray/icon.h"
 #include "swaybar/tray/item.h"
+#include "swaybar/tray/menu.h"
 #include "swaybar/tray/tray.h"
 #include "background-image.h"
 #include "cairo.h"
 #include "list.h"
 #include "log.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
-
-// TODO menu
 
 static bool sni_ready(struct swaybar_sni *sni) {
 	return sni->status && (sni->status[0] == 'N' ? // NeedsAttention
@@ -74,7 +73,8 @@ static int read_pixmap(sd_bus_message *msg, struct swaybar_sni *sni,
 		}
 
 		if (height > 0 && width == height) {
-			sway_log(SWAY_DEBUG, "%s %s: found icon w:%d h:%d", sni->watcher_id, prop, width, height);
+			sway_log(SWAY_DEBUG, "%s %s: found icon %dx%d", sni->watcher_id,
+					prop, width, height);
 			struct swaybar_pixmap *pixmap =
 				malloc(sizeof(struct swaybar_pixmap) + npixels);
 			pixmap->size = height;
@@ -86,7 +86,8 @@ static int read_pixmap(sd_bus_message *msg, struct swaybar_sni *sni,
 
 			list_add(pixmaps, pixmap);
 		} else {
-			sway_log(SWAY_DEBUG, "%s %s: discard invalid icon w:%d h:%d", sni->watcher_id, prop, width, height);
+			sway_log(SWAY_DEBUG, "%s %s: discard invalid icon %dx%d",
+					sni->watcher_id, prop, width, height);
 		}
 
 		sd_bus_message_exit_container(msg);
@@ -115,25 +116,26 @@ static int get_property_callback(sd_bus_message *msg, void *data,
 	const char *prop = d->prop;
 	const char *type = d->type;
 	void *dest = d->dest;
+	wl_list_remove(&d->link);
+	free(d);
 
 	int ret;
 	if (sd_bus_message_is_method_error(msg, NULL)) {
 		sway_log(SWAY_ERROR, "%s %s: %s", sni->watcher_id, prop,
 				sd_bus_message_get_error(msg)->message);
-		ret = sd_bus_message_get_errno(msg);
-		goto cleanup;
+		return sd_bus_message_get_errno(msg);
 	}
 
 	ret = sd_bus_message_enter_container(msg, 'v', type);
 	if (ret < 0) {
 		sway_log(SWAY_ERROR, "%s %s: %s", sni->watcher_id, prop, strerror(-ret));
-		goto cleanup;
+		return ret;
 	}
 
 	if (!type) {
 		ret = read_pixmap(msg, sni, prop, dest);
 		if (ret < 0) {
-			goto cleanup;
+			return ret;
 		}
 	} else {
 		if (*type == 's' || *type == 'o') {
@@ -143,7 +145,7 @@ static int get_property_callback(sd_bus_message *msg, void *data,
 		ret = sd_bus_message_read(msg, type, dest);
 		if (ret < 0) {
 			sway_log(SWAY_ERROR, "%s %s: %s", sni->watcher_id, prop, strerror(-ret));
-			goto cleanup;
+			return ret;
 		}
 
 		if (*type == 's' || *type == 'o') {
@@ -160,9 +162,7 @@ static int get_property_callback(sd_bus_message *msg, void *data,
 				prop[0] == 'A' : strncmp(prop, "Icon", 4) == 0))) {
 		set_sni_dirty(sni);
 	}
-cleanup:
-	wl_list_remove(&d->link);
-	free(data);
+
 	return ret;
 }
 
@@ -260,7 +260,7 @@ static void sni_match_signal_async(struct swaybar_sni *sni, char *signal,
 		wl_list_insert(&sni->slots, &slot->link);
 	} else {
 		sway_log(SWAY_ERROR, "%s failed to subscribe to signal %s: %s",
-				sni->service, signal, strerror(-ret));
+				sni->watcher_id, signal, strerror(-ret));
 		free(slot);
 	}
 }
@@ -293,7 +293,7 @@ struct swaybar_sni *create_sni(char *id, struct swaybar_tray *tray) {
 	sni_get_property_async(sni, "AttentionIconName", "s", &sni->attention_icon_name);
 	sni_get_property_async(sni, "AttentionIconPixmap", NULL, &sni->attention_icon_pixmap);
 	sni_get_property_async(sni, "ItemIsMenu", "b", &sni->item_is_menu);
-	sni_get_property_async(sni, "Menu", "o", &sni->menu);
+	sni_get_property_async(sni, "Menu", "o", &sni->menu_path);
 
 	sni_match_signal_async(sni, "NewIcon", handle_new_icon);
 	sni_match_signal_async(sni, "NewAttentionIcon", handle_new_attention_icon);
@@ -307,6 +307,14 @@ void destroy_sni(struct swaybar_sni *sni) {
 		return;
 	}
 
+	destroy_menu(sni->menu);
+	if (sni->menu_icon_theme_paths) {
+		for (char **path = sni->menu_icon_theme_paths; *path; ++path) {
+			free(path);
+		}
+		free(sni->menu_icon_theme_paths);
+	}
+
 	cairo_surface_destroy(sni->icon);
 	free(sni->watcher_id);
 	free(sni->service);
@@ -316,7 +324,7 @@ void destroy_sni(struct swaybar_sni *sni) {
 	list_free_items_and_destroy(sni->icon_pixmap);
 	free(sni->attention_icon_name);
 	list_free_items_and_destroy(sni->attention_icon_pixmap);
-	free(sni->menu);
+	free(sni->menu_path);
 	free(sni->icon_theme_path);
 
 	struct swaybar_sni_slot *slot, *slot_tmp;
@@ -328,8 +336,8 @@ void destroy_sni(struct swaybar_sni *sni) {
 	free(sni);
 }
 
-static void handle_click(struct swaybar_sni *sni, int x, int y,
-		uint32_t button, int delta) {
+static void handle_click(struct swaybar_sni *sni, struct swaybar_output *output,
+		struct wl_seat *seat, uint32_t serial, int x, int y, uint32_t button, int delta) {
 	const char *method = NULL;
 	struct tray_binding *binding = NULL;
 	wl_list_for_each(binding, &sni->tray->bar->config->tray_bindings, link) {
@@ -360,7 +368,9 @@ static void handle_click(struct swaybar_sni *sni, int x, int y,
 		method = "ContextMenu";
 	}
 
-	if (strncmp(method, "Scroll", strlen("Scroll")) == 0) {
+	if (sni->menu_path && strcmp(method, "ContextMenu") == 0) {
+		open_popup(sni, output, seat, serial, x, y);
+	} else if (strncmp(method, "Scroll", strlen("Scroll")) == 0) {
 		char dir = method[strlen("Scroll")];
 		char *orientation = (dir == 'U' || dir == 'D') ? "vertical" : "horizontal";
 		int sign = (dir == 'U' || dir == 'L') ? -1 : 1;
@@ -368,8 +378,16 @@ static void handle_click(struct swaybar_sni *sni, int x, int y,
 		sd_bus_call_method_async(sni->tray->bus, NULL, sni->service, sni->path,
 				sni->interface, "Scroll", NULL, NULL, "is", delta*sign, orientation);
 	} else {
+		// guess global position since wayland doesn't expose it
+		struct swaybar_config *config = sni->tray->bar->config;
+		int global_x = output->output_x + config->gaps.left + x;
+		bool top_bar = config->position & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+		int global_y = output->output_y + (top_bar ? config->gaps.top + y:
+				(int) output->output_height - config->gaps.bottom - y);
+
+		sway_log(SWAY_DEBUG, "Guessing click position at (%d, %d)", global_x, global_y);
 		sd_bus_call_method_async(sni->tray->bus, NULL, sni->service, sni->path,
-				sni->interface, method, NULL, NULL, "ii", x, y);
+				sni->interface, method, NULL, NULL, "ii", global_x, global_y);
 	}
 }
 
@@ -380,7 +398,7 @@ static int cmp_sni_id(const void *item, const void *cmp_to) {
 
 static enum hotspot_event_handling icon_hotspot_callback(
 		struct swaybar_output *output, struct swaybar_hotspot *hotspot,
-		double x, double y, uint32_t button, void *data) {
+		struct wl_seat *seat, uint32_t serial, double x, double y, uint32_t button, void *data) {
 	sway_log(SWAY_DEBUG, "Clicked on %s", (char *)data);
 
 	struct swaybar_tray *tray = output->bar->tray;
@@ -388,15 +406,7 @@ static enum hotspot_event_handling icon_hotspot_callback(
 
 	if (idx != -1) {
 		struct swaybar_sni *sni = tray->items->items[idx];
-		// guess global position since wayland doesn't expose it
-		struct swaybar_config *config = tray->bar->config;
-		int global_x = output->output_x + config->gaps.left + x;
-		bool top_bar = config->position & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
-		int global_y = output->output_y + (top_bar ? config->gaps.top + y:
-				(int) output->output_height - config->gaps.bottom - y);
-
-		sway_log(SWAY_DEBUG, "Guessing click position at (%d, %d)", global_x, global_y);
-		handle_click(sni, global_x, global_y, button, 1); // TODO get delta from event
+		handle_click(sni, output, seat, serial, x, y, button, 1); // TODO get delta from event
 		return HOTSPOT_IGNORE;
 	} else {
 		sway_log(SWAY_DEBUG, "but it doesn't exist");

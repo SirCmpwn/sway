@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
 #include <dirent.h>
+#include <locale.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -96,12 +97,6 @@ static const char *group_handler(char *old_group, char *new_group,
 			return "missing required key 'Comment'";
 		} else if (!theme->directories) {
 			return "missing required key 'Directories'";
-		} else {
-			for (char *c = theme->name; *c; ++c) {
-				if (*c == ',' || *c == ' ') {
-					return "malformed theme name";
-				}
-			}
 		}
 	} else {
 		if (theme->subdirs->length == 0) { // skip
@@ -142,12 +137,22 @@ static const char *group_handler(char *old_group, char *new_group,
 }
 
 static const char *entry_handler(char *group, char *key, char *value,
-		struct icon_theme *theme) {
+		int locale_level, struct icon_theme *theme) {
 	if (strcmp(group, "Icon Theme") == 0) {
 		if (strcmp(key, "Name") == 0) {
-			theme->name = strdup(value);
+			if (locale_level > theme->name_locale_level) {
+				for (char *c = value; *c; ++c) {
+					if (iscntrl(*c)) {
+						return "malformed theme name";
+					}
+				}
+				theme->name = strdup(value);
+				theme->name_locale_level = locale_level;
+			}
 		} else if (strcmp(key, "Comment") == 0) {
-			theme->comment = strdup(value);
+			if (!theme->comment && locale_level >= 0) {
+				theme->comment = strdup(value);
+			}
 		} else if (strcmp(key, "Inherits") == 0) {
 			theme->inherits = split_string(value, ",");
 		} else if (strcmp(key, "Directories") == 0) {
@@ -198,6 +203,50 @@ static const char *entry_handler(char *group, char *key, char *value,
 	return NULL;
 }
 
+// TODO make this better?
+// The C standard claims that setlocale returns an opaque string, but doesn't
+// provide any mechanisms for retrieving useful information from the string
+void get_locale_matchings(char *locale_matchings[6]) {
+	char *locale_ref = setlocale(LC_MESSAGES, NULL);
+	if (locale_ref == NULL || strcmp(locale_ref, "") == 0 ||
+			strcmp(locale_ref, "C") == 0 || strcmp(locale_ref, "POSIX") == 0) {
+		return;
+	}
+
+	// duplicate locale without encoding
+	char *locale = strdup(locale_ref);
+	char *encoding = strchr(locale, '.');
+	char *modifier = strchr(locale_ref, '@');
+	if (encoding) {
+		if (modifier) {
+			modifier = strcpy(encoding, modifier);
+		} else {
+			*encoding = '\0';
+		}
+	}
+
+	char *country = strchr(locale, '_');
+	if (modifier && country) {
+		locale_matchings[5] = locale;
+		locale_matchings[4] = strndup(locale, modifier - locale);
+		locale_matchings[3] = strdup(locale);
+		strcpy(locale_matchings[3] + (country - locale), modifier);
+		locale_matchings[2] = strndup(locale, country - locale);
+	} else if (country) {
+		locale_matchings[4] = locale;
+		locale_matchings[2] = strndup(locale, country - locale);
+	} else if (modifier) {
+		locale_matchings[3] = locale;
+		locale_matchings[2] = strndup(locale, modifier - locale);
+	} else {
+		locale_matchings[2] = locale;
+	}
+
+	for (int i = 0; i < 6; ++i) {
+		sway_log(SWAY_INFO, "%d %s", i, locale_matchings[i]);
+	}
+}
+
 /*
  * This is a Freedesktop Desktop Entry parser (essentially INI)
  * It calls entry_handler for every entry
@@ -226,7 +275,12 @@ static struct icon_theme *read_theme_file(char *basedir, char *theme_name) {
 	}
 	theme->subdirs = create_list();
 
+	// parse locale
+	char *locale_matchings[6] = { NULL };
+	get_locale_matchings(locale_matchings);
+
 	list_t *groups = create_list();
+	list_t *entries = create_list(); // per group
 
 	const char *error = NULL;
 	int line_no = 0;
@@ -269,6 +323,10 @@ static struct icon_theme *read_theme_file(char *basedir, char *theme_name) {
 			}
 
 			list_add(groups, strdup(&line[1]));
+			for (int i = 0; i < entries->length; ++i) {
+				free(entries->items[i]);
+			}
+			entries->length = 0;
 		} else { // key-value pair
 			if (groups->length == 0) {
 				error = "unexpected content before first header";
@@ -276,22 +334,52 @@ static struct icon_theme *read_theme_file(char *basedir, char *theme_name) {
 			}
 
 			// check well-formed
-			int eok = 0;
-			for (; isalnum(line[eok]) || line[eok] == '-'; ++eok) {} // TODO locale?
-			int i = eok - 1;
-			while (isspace(line[++i])) {}
-			if (line[i] != '=') {
+			char *p = line;
+			for (; isalnum(*p) || *p == '-'; ++p) {}
+
+			int locale_level = 1;
+			if (*p == '[') {
+				*p = '\0'; // remove locale from key
+				char *locale = p + 1;
+
+				while (*++p != ']') {
+					if (*p == '\0') {
+						error = "malformed key-value pair";
+						break;
+					}
+				}
+				if (error) {
+					break;
+				}
+
+				*p++ = '\0'; // split into key-value pair
+
+				// match locale
+				for (locale_level = sizeof(locale_matchings) / sizeof(locale_matchings[0]);
+						--locale_level >= 0;) {
+					if (locale_matchings[locale_level] &&
+						strcmp(locale, locale_matchings[locale_level]) == 0) {
+						break;
+					}
+				}
+
+				list_add(entries, strdup(line));
+			}
+
+			for (; isspace(*p); ++p) {}
+			if (*p != '=') {
+				sway_log(SWAY_INFO, "%s", p);
 				error = "malformed key-value pair";
 				break;
 			}
+			*p = '\0'; // split into key-value pair
 
-			line[eok] = '\0'; // split into key-value pair
-			char *value = &line[i];
-			while (isspace(*++value)) {}
+			while (isspace(*++p)) {}
 			// TODO unescape value
 
-			error = entry_handler(groups->items[groups->length - 1], line,
-					value, theme);
+			// sway_log(SWAY_INFO, "%s %s %d", line, p, locale_level);
+			error = entry_handler(groups->items[groups->length - 1], line, p,
+					locale_level, theme);
 			if (error) {
 				break;
 			}
@@ -317,7 +405,12 @@ static struct icon_theme *read_theme_file(char *basedir, char *theme_name) {
 		theme = NULL;
 	}
 
+	for (size_t i = 0; i < sizeof(locale_matchings) / sizeof(locale_matchings[0]); ++i) {
+		free(locale_matchings[i]);
+	}
+
 	free(full_line);
+	list_free_items_and_destroy(entries);
 	list_free_items_and_destroy(groups);
 	fclose(theme_file);
 	return theme;
@@ -486,6 +579,7 @@ static char *find_icon_with_theme(list_t *basedirs, list_t *themes, char *name,
 				char *test_icon = find_icon_in_subdir(name, basedirs->items[i],
 						theme->dir, subdir->name);
 				if (test_icon) {
+					free(icon);
 					icon = test_icon;
 					smallest_error = error;
 					*min_size = subdir->min_size;

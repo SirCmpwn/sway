@@ -2,6 +2,7 @@ tray_files = have_tray ? [
 	'tray/host.c',
 	'tray/icon.c',
 	'tray/item.c',
+	'tray/menu.c',
 	'tray/tray.c',
 	'tray/watcher.c'
 ] : []
