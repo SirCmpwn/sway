@@ -87,6 +87,8 @@ if get_option('tray').enabled() and not tray_deps_found
 endif
 have_tray = (not get_option('tray').disabled()) and tray_deps_found
 
+use_insecure_protocols = get_option('use-insecure-protocols')
+
 conf_data = configuration_data()
 
 conf_data.set10('HAVE_XWAYLAND', have_xwayland)
@@ -94,6 +96,7 @@ conf_data.set10('HAVE_GDK_PIXBUF', gdk_pixbuf.found())
 conf_data.set10('HAVE_SYSTEMD', systemd.found())
 conf_data.set10('HAVE_ELOGIND', elogind.found())
 conf_data.set10('HAVE_TRAY', have_tray)
+conf_data.set10('USE_INSECURE_PROTOCOLS', use_insecure_protocols)
 
 scdoc = dependency('scdoc', version: '>=1.9.2', native: true, required: get_option('man-pages'))
 if scdoc.found()
@@ -283,6 +286,7 @@ summary({
 	'elogind': elogind.found(),
 	'tray': have_tray,
 	'man-pages': scdoc.found(),
+	'use-insecure-protocols': use_insecure_protocols
 }, bool_yn: true)
 
 if not systemd.found() and not elogind.found()

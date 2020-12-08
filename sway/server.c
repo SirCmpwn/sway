@@ -139,13 +139,14 @@ bool server_init(struct sway_server *server) {
 		handle_output_power_manager_set_mode;
 	wl_signal_add(&server->output_power_manager_v1->events.set_mode,
 		&server->output_power_manager_set_mode);
+#if USE_INSECURE_PROTOCOLS
 	server->input_method = wlr_input_method_manager_v2_create(server->wl_display);
 	server->text_input = wlr_text_input_manager_v3_create(server->wl_display);
-	server->foreign_toplevel_manager =
-		wlr_foreign_toplevel_manager_v1_create(server->wl_display);
-
 	wlr_export_dmabuf_manager_v1_create(server->wl_display);
 	wlr_screencopy_manager_v1_create(server->wl_display);
+#endif
+	server->foreign_toplevel_manager =
+		wlr_foreign_toplevel_manager_v1_create(server->wl_display);
 	wlr_data_control_manager_v1_create(server->wl_display);
 	wlr_primary_selection_v1_device_manager_create(server->wl_display);
 	wlr_viewporter_create(server->wl_display);

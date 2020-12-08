@@ -6,3 +6,4 @@ option('xwayland', type: 'feature', value: 'auto', description: 'Enable support 
 option('tray', type: 'feature', value: 'auto', description: 'Enable support for swaybar tray')
 option('gdk-pixbuf', type: 'feature', value: 'auto', description: 'Enable support for more image formats in swaybg')
 option('man-pages', type: 'feature', value: 'auto', description: 'Generate and install man pages')
+option('use-insecure-protocols', type: 'boolean', value: true, description: 'Enable insecure protocols')

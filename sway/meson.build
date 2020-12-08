@@ -32,7 +32,6 @@ sway_sources = files(
 	'input/seatop_resize_tiling.c',
 	'input/switch.c',
 	'input/tablet.c',
-	'input/text_input.c',
 
 	'config/bar.c',
 	'config/output.c',
@@ -221,6 +220,10 @@ sway_deps = [
 if have_xwayland
 	sway_sources += 'desktop/xwayland.c'
 	sway_deps += xcb
+endif
+
+if use_insecure_protocols
+	sway_sources += 'input/text_input.c'
 endif
 
 executable(
