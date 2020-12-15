@@ -67,4 +67,13 @@ const char *sway_wl_output_subpixel_to_string(enum wl_output_subpixel subpixel);
 
 bool sway_set_cloexec(int fd, bool cloexec);
 
+struct timespec;
+
+void timespec_sub(struct timespec *r, const struct timespec *a,
+	const struct timespec *b);
+int64_t timespec_sub_to_nsec(const struct timespec *a, const struct timespec *b);
+void timespec_add_nsec(struct timespec *r, const struct timespec *a,
+	int64_t nsec);
+int64_t timespec_to_nsec(const struct timespec *t);
+
 #endif

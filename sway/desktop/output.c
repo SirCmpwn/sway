@@ -29,6 +29,7 @@
 #include "sway/tree/root.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
+#include "util.h"
 
 struct sway_output *output_by_name_or_id(const char *name_or_id) {
 	for (int i = 0; i < root->outputs->length; ++i) {
@@ -633,28 +634,15 @@ static void damage_handle_frame(struct wl_listener *listener, void *user_data) {
 			= wlr_backend_get_presentation_clock(server.backend);
 		clock_gettime(presentation_clock, &now);
 
-		const long NSEC_IN_SECONDS = 1000000000;
-		struct timespec predicted_refresh = output->last_presentation;
-		predicted_refresh.tv_nsec += output->refresh_nsec % NSEC_IN_SECONDS;
-		predicted_refresh.tv_sec += output->refresh_nsec / NSEC_IN_SECONDS;
-		if (predicted_refresh.tv_nsec >= NSEC_IN_SECONDS) {
-			predicted_refresh.tv_sec += 1;
-			predicted_refresh.tv_nsec -= NSEC_IN_SECONDS;
-		}
+		struct timespec predicted_refresh;
+		timespec_add_nsec(&predicted_refresh, &output->last_presentation,
+			output->next_refresh_nsec);
 
 		// If the predicted refresh time is before the current time then
 		// there's no point in delaying.
-		//
-		// We only check tv_sec because if the predicted refresh time is less
-		// than a second before the current time, then msec_until_refresh will
-		// end up slightly below zero, which will effectively disable the delay
-		// without potential disastrous negative overflows that could occur if
-		// tv_sec was not checked.
-		if (predicted_refresh.tv_sec >= now.tv_sec) {
-			long nsec_until_refresh
-				= (predicted_refresh.tv_sec - now.tv_sec) * NSEC_IN_SECONDS
-					+ (predicted_refresh.tv_nsec - now.tv_nsec);
-
+		int64_t nsec_until_refresh =
+			timespec_sub_to_nsec(&predicted_refresh, &now);
+		if (nsec_until_refresh >= 0) {
 			// We want msec_until_refresh to be conservative, that is, floored.
 			// If we have 7.9 msec until refresh, we better compute the delay
 			// as if we had only 7 msec, so that we don't accidentally delay
@@ -903,7 +891,7 @@ static void handle_present(struct wl_listener *listener, void *data) {
 	}
 
 	output->last_presentation = *output_event->when;
-	output->refresh_nsec = output_event->refresh;
+	output->next_refresh_nsec = output_event->refresh;
 }
 
 void handle_new_output(struct wl_listener *listener, void *data) {

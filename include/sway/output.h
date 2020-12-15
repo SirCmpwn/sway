@@ -53,7 +53,7 @@ struct sway_output {
 	} events;
 
 	struct timespec last_presentation;
-	uint32_t refresh_nsec;
+	uint32_t next_refresh_nsec;
 	int max_render_time; // In milliseconds
 	struct wl_event_source *repaint_timer;
 };

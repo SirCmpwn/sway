@@ -7,6 +7,7 @@
 #include <string.h>
 #include <strings.h>
 #include <wayland-server-protocol.h>
+#include <time.h>
 #include "log.h"
 #include "util.h"
 
@@ -141,4 +142,41 @@ bool sway_set_cloexec(int fd, bool cloexec) {
 		return false;
 	}
 	return true;
+}
+
+static const int64_t NSEC_PER_SEC = 1000000000;
+
+void timespec_sub(struct timespec *r, const struct timespec *a,
+		const struct timespec *b) {
+	r->tv_sec = a->tv_sec - b->tv_sec;
+	r->tv_nsec = a->tv_nsec - b->tv_nsec;
+	if (r->tv_nsec < 0) {
+		r->tv_sec--;
+		r->tv_nsec += NSEC_PER_SEC;
+	}
+}
+
+int64_t timespec_sub_to_nsec(const struct timespec *a,
+		const struct timespec *b) {
+	struct timespec r;
+	timespec_sub(&r, a, b);
+	return timespec_to_nsec(&r);
+}
+
+void timespec_add_nsec(struct timespec *r, const struct timespec *a,
+		int64_t nsec) {
+	r->tv_sec = a->tv_sec + (nsec / NSEC_PER_SEC);
+	r->tv_nsec = a->tv_nsec + (nsec % NSEC_PER_SEC);
+
+	if (r->tv_nsec >= NSEC_PER_SEC) {
+		r->tv_sec++;
+		r->tv_nsec -= NSEC_PER_SEC;
+	} else if (r->tv_nsec < 0) {
+		r->tv_sec--;
+		r->tv_nsec += NSEC_PER_SEC;
+	}
+}
+
+int64_t timespec_to_nsec(const struct timespec *t) {
+	return (int64_t)t->tv_sec * NSEC_PER_SEC + t->tv_nsec;
 }
