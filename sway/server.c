@@ -52,6 +52,24 @@ bool server_privileged_prepare(struct sway_server *server) {
 	return true;
 }
 
+
+static void handle_workspace_manager_commit_request(struct wl_listener *listener, void *data) {
+	struct sway_server *_server = wl_container_of(listener, _server, workspace_manager_commit_request);
+	struct wlr_workspace_manager_v1 *manager = data;
+	struct wlr_workspace_group_handle_v1 *group;
+	wl_list_for_each(group, &manager->groups, link) {
+		struct wlr_workspace_handle_v1 *workspace;
+		struct wlr_workspace_handle_v1 *next_active_workspace;
+		wl_list_for_each(workspace, &group->workspaces, link) {
+			if (workspace->current & WLR_WORKSPACE_HANDLE_V1_STATE_ACTIVE) {
+				next_active_workspace = workspace;
+			}
+		}
+		struct sway_workspace *sw_workspace = workspace_by_name(next_active_workspace->name);
+		workspace_switch(sw_workspace, false);
+	}
+}
+
 bool server_init(struct sway_server *server) {
 	sway_log(SWAY_DEBUG, "Initializing Wayland server");
 
@@ -143,6 +161,12 @@ bool server_init(struct sway_server *server) {
 	server->text_input = wlr_text_input_manager_v3_create(server->wl_display);
 	server->foreign_toplevel_manager =
 		wlr_foreign_toplevel_manager_v1_create(server->wl_display);
+	server->workspace_manager =
+			wlr_workspace_manager_v1_create(server->wl_display);
+	server->workspace_manager_commit_request.notify =
+			handle_workspace_manager_commit_request;
+	wl_signal_add(&server->workspace_manager->events.commit,
+				  &server->workspace_manager_commit_request);
 
 	wlr_export_dmabuf_manager_v1_create(server->wl_display);
 	wlr_screencopy_manager_v1_create(server->wl_display);

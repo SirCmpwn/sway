@@ -916,6 +916,8 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 		return;
 	}
 	output->server = server;
+	output->workspace_group = wlr_workspace_group_handle_v1_create(output->server->workspace_manager);
+	wlr_workspace_group_handle_v1_output_enter(output->workspace_group, wlr_output);
 	output->damage = wlr_output_damage_create(wlr_output);
 
 	wl_signal_add(&wlr_output->events.destroy, &output->destroy);

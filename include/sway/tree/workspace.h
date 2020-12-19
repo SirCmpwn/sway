@@ -43,6 +43,9 @@ struct sway_workspace {
 	bool urgent;
 
 	struct sway_workspace_state current;
+
+	struct wlr_workspace_handle_v1 *workspace_handle;
+	struct wl_listener *workspace_activate_request;
 };
 
 struct workspace_config *workspace_find_config(const char *ws_name);

@@ -5,9 +5,11 @@
 #include <wayland-server-core.h>
 #include <wlr/types/wlr_box.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_workspace_v1.h>
 #include "config.h"
 #include "sway/tree/node.h"
 #include "sway/tree/view.h"
+#include <sway/tree/workspace.h>
 
 struct sway_server;
 struct sway_container;
@@ -56,6 +58,8 @@ struct sway_output {
 	uint32_t refresh_nsec;
 	int max_render_time; // In milliseconds
 	struct wl_event_source *repaint_timer;
+
+	struct wlr_workspace_group_handle_v1 *workspace_group;
 };
 
 struct sway_output *output_create(struct wlr_output *wlr_output);

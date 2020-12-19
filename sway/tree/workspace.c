@@ -110,6 +110,9 @@ struct sway_workspace *workspace_create(struct sway_output *output,
 	// If not already added, add the output to the lowest priority
 	workspace_output_add_priority(ws, output);
 
+	ws->workspace_handle = wlr_workspace_handle_v1_create(output->workspace_group);
+	wlr_workspace_handle_v1_set_name(ws->workspace_handle, ws->name);
+
 	output_add_workspace(output, ws);
 	output_sort_workspaces(output);
 
@@ -128,7 +131,9 @@ void workspace_destroy(struct sway_workspace *workspace) {
 				"which is still referenced by transactions")) {
 		return;
 	}
+	wlr_workspace_handle_v1_destroy(workspace->workspace_handle);
 
+	free(workspace->workspace_handle);
 	free(workspace->name);
 	free(workspace->representation);
 	list_free_items_and_destroy(workspace->output_priority);
@@ -453,6 +458,16 @@ struct sway_workspace *workspace_prev(struct sway_workspace *current) {
 	return workspace_prev_next_impl(current, -1);
 }
 
+static void set_active_current_and_diactivate_others(struct wlr_workspace_handle_v1 *workspace) {
+	wlr_workspace_handle_v1_set_active(workspace, true);
+	struct wlr_workspace_handle_v1 *tmp_workspace;
+	wl_list_for_each(tmp_workspace, &workspace->group->workspaces, link) {
+		if (workspace != tmp_workspace) {
+			wlr_workspace_handle_v1_set_active(tmp_workspace, false);
+		}
+	}
+}
+
 bool workspace_switch(struct sway_workspace *workspace,
 		bool no_auto_back_and_forth) {
 	struct sway_seat *seat = input_manager_current_seat();
@@ -475,6 +490,9 @@ bool workspace_switch(struct sway_workspace *workspace,
 
 	sway_log(SWAY_DEBUG, "Switching to workspace %p:%s",
 		workspace, workspace->name);
+
+	set_active_current_and_diactivate_others(workspace->workspace_handle);
+
 	struct sway_node *next = seat_get_focus_inactive(seat, &workspace->node);
 	if (next == NULL) {
 		next = &workspace->node;
