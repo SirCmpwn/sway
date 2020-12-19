@@ -161,6 +161,12 @@ set|plus|minus <amount>
 	_right_, _bottom_, and _left_ or per direction with _horizontal_ and
 	_vertical_.
 
+*inhibit_fullscreen* toggle|enable|disable
+	Set/unset fullscreen inhibitor for for the container. If enabled, client
+	requests to fullscreen the container will be ignored. This can be used to
+	have clients transition to their fullscreen interface, while still
+	constraining them to their container.
+
 *inhibit_idle* focus|fullscreen|open|none|visible
 	Set/unset an idle inhibitor for the view. _focus_ will inhibit idle when
 	the view is focused by any seat. _fullscreen_ will inhibit idle when the
