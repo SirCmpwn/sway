@@ -35,8 +35,6 @@ fi
 if [ "$1" = "--notify" ] && [ "$NOTIFY" = "no" ]; then
   NOTIFY=yes
   shift 1
-else
-  NOTIFY=no
 fi
 
 ACTION=${1:-usage}
