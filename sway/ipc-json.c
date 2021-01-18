@@ -490,6 +490,10 @@ static void ipc_json_describe_view(struct sway_container *c, json_object *object
 	json_object_object_add(object, "app_id",
 			app_id ? json_object_new_string(app_id) : NULL);
 
+	const char *label = view_get_conn_label(c->view);
+	json_object_object_add(object, "cli_label",
+			label ? json_object_new_string(label) : NULL);
+
 	bool visible = view_is_visible(c->view);
 	json_object_object_add(object, "visible", json_object_new_boolean(visible));
 

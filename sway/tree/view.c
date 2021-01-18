@@ -13,6 +13,7 @@
 #endif
 #include "list.h"
 #include "log.h"
+#include "sway/client_label.h"
 #include "sway/criteria.h"
 #include "sway/commands.h"
 #include "sway/desktop.h"
@@ -105,6 +106,21 @@ const char *view_get_class(struct sway_view *view) {
 const char *view_get_instance(struct sway_view *view) {
 	if (view->impl->get_string_prop) {
 		return view->impl->get_string_prop(view, VIEW_PROP_INSTANCE);
+	}
+	return NULL;
+}
+
+const char *view_get_conn_label(struct sway_view *view) {
+	switch (view->type) {
+	case SWAY_VIEW_XDG_SHELL:;
+		struct wl_client *client =
+			wl_resource_get_client(view->surface->resource);
+		return wl_client_label_get(client);
+#if HAVE_XWAYLAND
+	case SWAY_VIEW_XWAYLAND:;
+		// Is this concept useful in xwayland?
+		break;
+#endif
 	}
 	return NULL;
 }

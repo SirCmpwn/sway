@@ -80,6 +80,7 @@ static struct cmd_handler handlers[] = {
 	{ "no_focus", cmd_no_focus },
 	{ "output", cmd_output },
 	{ "popup_during_fullscreen", cmd_popup_during_fullscreen },
+	{ "sandbox_socket", cmd_sandbox_socket },
 	{ "seat", cmd_seat },
 	{ "set", cmd_set },
 	{ "show_marks", cmd_show_marks },
