@@ -211,7 +211,8 @@ void arrange_layers(struct sway_output *output) {
 	for (size_t i = 0; i < nlayers; ++i) {
 		wl_list_for_each_reverse(layer,
 				&output->layers[layers_above_shell[i]], link) {
-			if (layer->layer_surface->current.keyboard_interactive &&
+			if (layer->layer_surface->current.keyboard_interactive ==
+					ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE &&
 					layer->layer_surface->mapped) {
 				topmost = layer;
 				break;
@@ -227,7 +228,8 @@ void arrange_layers(struct sway_output *output) {
 		if (topmost != NULL) {
 			seat_set_focus_layer(seat, topmost->layer_surface);
 		} else if (seat->focused_layer &&
-				!seat->focused_layer->current.keyboard_interactive) {
+				seat->focused_layer->current.keyboard_interactive !=
+				ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE) {
 			seat_set_focus_layer(seat, NULL);
 		}
 	}

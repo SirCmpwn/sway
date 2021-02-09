@@ -365,8 +365,12 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 	if (surface && wlr_surface_is_layer_surface(surface)) {
 		struct wlr_layer_surface_v1 *layer =
 			wlr_layer_surface_v1_from_wlr_surface(surface);
-		if (layer->current.keyboard_interactive) {
+		if (layer->current.keyboard_interactive ==
+				ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE) {
 			seat_set_focus_layer(seat, layer);
+		} else if (layer->current.keyboard_interactive ==
+				ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND) {
+			seat_set_focus_surface(seat, surface, true);
 		}
 		seat_pointer_notify_button(seat, time_msec, button, state);
 		return;
