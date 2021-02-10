@@ -230,6 +230,7 @@ static void finalize_move(struct sway_seat *seat) {
 		seatop_begin_default(seat);
 		return;
 	}
+	config->handler_context.seat = seat;
 
 	struct sway_container *con = e->con;
 	struct sway_container *old_parent = con->parent;

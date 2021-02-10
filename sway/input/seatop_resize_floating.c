@@ -49,6 +49,8 @@ static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
 		mouse_move_y = 0;
 	}
 
+	config->handler_context.seat = seat;
+
 	double grow_width = edge & WLR_EDGE_LEFT ? -mouse_move_x : mouse_move_x;
 	double grow_height = edge & WLR_EDGE_TOP ? -mouse_move_y : mouse_move_y;
 

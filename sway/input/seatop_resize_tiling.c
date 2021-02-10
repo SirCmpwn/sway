@@ -93,6 +93,8 @@ static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
 		}
 	}
 
+	config->handler_context.seat = seat;
+
 	if (amount_x != 0) {
 		container_resize_tiled(e->h_con, e->edge_x, amount_x);
 	}
