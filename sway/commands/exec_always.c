@@ -2,16 +2,20 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <signal.h>
+#include "sway/client_label.h"
 #include "sway/commands.h"
 #include "sway/config.h"
+#include "sway/server.h"
 #include "sway/tree/container.h"
 #include "sway/tree/root.h"
 #include "sway/tree/workspace.h"
 #include "log.h"
 #include "stringop.h"
+#include "util.h"
 
 struct cmd_results *cmd_exec_validate(int argc, char **argv) {
 	struct cmd_results *error = NULL;
@@ -26,14 +30,39 @@ struct cmd_results *cmd_exec_validate(int argc, char **argv) {
 
 struct cmd_results *cmd_exec_process(int argc, char **argv) {
 	struct cmd_results *error = NULL;
+	bool use_wl_socket = false;
+	int skip_argc = 0;
 	char *tmp = NULL;
-	if (strcmp(argv[0], "--no-startup-id") == 0) {
-		sway_log(SWAY_INFO, "exec switch '--no-startup-id' not supported, ignored.");
-		--argc; ++argv;
-		if ((error = checkarg(argc, argv[-1], EXPECTED_AT_LEAST, 1))) {
-			return error;
+	char *label = NULL;
+
+	while (skip_argc < argc && strncmp(argv[skip_argc], "--", 2) == 0) {
+		if (strcmp(argv[skip_argc], "--no-startup-id") == 0) {
+			sway_log(SWAY_INFO, "exec switch '--no-startup-id' not supported, ignored.");
+			skip_argc++;
+		} else if (strcmp(argv[skip_argc], "--use-wayland-socket") == 0) {
+			use_wl_socket = true;
+			skip_argc++;
+		} else if (strcmp(argv[skip_argc], "--label") == 0) {
+			skip_argc++;
+			if (skip_argc >= argc)
+				return cmd_results_new(CMD_INVALID, "--label requires an argument");
+			label = argv[skip_argc];
+			skip_argc++;
+		} else if (strcmp(argv[skip_argc], "--") == 0) {
+			skip_argc++;
+			break;
+		} else {
+			return cmd_results_new(CMD_INVALID, "Unknown switch %s", argv[skip_argc]);
 		}
 	}
+	if ((error = checkarg(argc - skip_argc, argv[-1], EXPECTED_AT_LEAST, 1))) {
+		return error;
+	}
+	argc -= skip_argc;
+	argv += skip_argc;
+
+	if (label)
+		use_wl_socket = true;
 
 	if (argc == 1 && (argv[0][0] == '\'' || argv[0][0] == '"')) {
 		tmp = strdup(argv[0]);
@@ -54,6 +83,17 @@ struct cmd_results *cmd_exec_process(int argc, char **argv) {
 		sway_log(SWAY_ERROR, "Unable to create pipe for fork");
 	}
 
+	int sockets[2];
+	struct wl_client* client = NULL;
+	if (use_wl_socket) {
+		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) != 0) {
+			sway_log_errno(SWAY_ERROR, "socketpair failed in exec");
+			use_wl_socket = false;
+		} else {
+			sway_set_cloexec(sockets[0], true);
+		}
+	}
+
 	pid_t pid, child;
 	// Fork process
 	if ((pid = fork()) == 0) {
@@ -63,6 +103,15 @@ struct cmd_results *cmd_exec_process(int argc, char **argv) {
 		sigemptyset(&set);
 		sigprocmask(SIG_SETMASK, &set, NULL);
 		close(fd[0]);
+		if (use_wl_socket) {
+			close(sockets[0]);
+			sway_set_cloexec(sockets[1], false);
+
+			char wayland_socket_str[16];
+			snprintf(wayland_socket_str, sizeof(wayland_socket_str),
+					"%d", sockets[1]);
+			setenv("WAYLAND_SOCKET", wayland_socket_str, true);
+		}
 		if ((child = fork()) == 0) {
 			close(fd[1]);
 			execl("/bin/sh", "/bin/sh", "-c", cmd, (void *)NULL);
@@ -77,9 +126,17 @@ struct cmd_results *cmd_exec_process(int argc, char **argv) {
 	} else if (pid < 0) {
 		close(fd[0]);
 		close(fd[1]);
+		if (use_wl_socket) {
+			close(sockets[0]);
+			close(sockets[1]);
+		}
 		return cmd_results_new(CMD_FAILURE, "fork() failed");
 	}
 	close(fd[1]); // close write
+	if (use_wl_socket) {
+		close(sockets[1]);
+		client = wl_client_create(server.wl_display, sockets[0]);
+	}
 	ssize_t s = 0;
 	while ((size_t)s < sizeof(pid_t)) {
 		s += read(fd[0], ((uint8_t *)&child) + s, sizeof(pid_t) - s);
@@ -92,6 +149,10 @@ struct cmd_results *cmd_exec_process(int argc, char **argv) {
 		root_record_workspace_pid(child);
 	} else {
 		return cmd_results_new(CMD_FAILURE, "Second fork() failed");
+	}
+
+	if (client && label) {
+		wl_client_label_set(client, strdup(label));
 	}
 
 	return cmd_results_new(CMD_SUCCESS, NULL);

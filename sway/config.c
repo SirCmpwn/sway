@@ -85,6 +85,11 @@ static void free_mode(struct sway_mode *mode) {
 	free(mode);
 }
 
+static void free_security_config(struct security_config *cfg) {
+	free(cfg->name);
+	free(cfg);
+}
+
 void free_config(struct sway_config *config) {
 	if (!config) {
 		return;
@@ -151,6 +156,12 @@ void free_config(struct sway_config *config) {
 		}
 		list_free(config->criteria);
 	}
+	if (config->security_configs) {
+		for (int i = 0; i < config->security_configs->length; ++i) {
+			free_security_config(config->security_configs->items[i]);
+		}
+		list_free(config->security_configs);
+	}
 	list_free(config->no_focus);
 	list_free(config->active_bar_modifiers);
 	list_free_items_and_destroy(config->config_chain);
@@ -161,6 +172,8 @@ void free_config(struct sway_config *config) {
 	free(config->font);
 	free(config->swaybg_command);
 	free(config->swaynag_command);
+	free(config->swaybg_label);
+	free(config->swaynag_label);
 	free((char *)config->current_config_path);
 	free((char *)config->current_config);
 	keysym_translation_state_destroy(config->keysym_translation_state);

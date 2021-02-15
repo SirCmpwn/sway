@@ -8,6 +8,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "log.h"
+#include "sway/client_label.h"
+#include "sway/config.h"
 #include "sway/server.h"
 #include "sway/swaynag.h"
 #include "util.h"
@@ -54,6 +56,10 @@ bool swaynag_spawn(const char *swaynag_command,
 	if (swaynag->client == NULL) {
 		sway_log_errno(SWAY_ERROR, "wl_client_create failed");
 		goto failed;
+	}
+
+	if (config->swaynag_label) {
+		wl_client_label_set(swaynag->client, strdup(config->swaynag_label));
 	}
 
 	swaynag->client_destroy.notify = handle_swaynag_client_destroy;

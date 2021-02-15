@@ -304,4 +304,7 @@ sway_cmd cmd_ipc_cmd;
 sway_cmd cmd_ipc_events;
 sway_cmd cmd_ipc_event_cmd;
 
+sway_cmd cmd_sandbox_socket;
+sway_cmd cmd_security_label;
+
 #endif

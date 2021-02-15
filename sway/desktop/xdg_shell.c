@@ -6,6 +6,7 @@
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/edges.h>
 #include "log.h"
+#include "sway/client_label.h"
 #include "sway/decoration.h"
 #include "sway/desktop.h"
 #include "sway/desktop/transaction.h"
@@ -542,4 +543,48 @@ void handle_xdg_shell_surface(struct wl_listener *listener, void *data) {
 	wl_signal_add(&xdg_surface->events.destroy, &xdg_shell_view->destroy);
 
 	xdg_surface->data = xdg_shell_view;
+}
+
+struct wl_client_label {
+	struct wl_listener listener;
+	char* label;
+};
+
+static void wl_client_label_notify_fn(struct wl_listener *listener, void *data) {
+	// struct wl_client *client = data;
+	struct wl_client_label *label = wl_container_of(listener, label, listener);
+	free(label->label);
+	free(label);
+}
+
+char *wl_client_label_get(struct wl_client *client) {
+	struct wl_listener *label_l =
+		wl_client_get_destroy_listener(client, wl_client_label_notify_fn);
+	if (!label_l) {
+		return NULL;
+	}
+	struct wl_client_label *label_s = wl_container_of(label_l, label_s, listener);
+	return label_s->label;
+}
+
+void wl_client_label_set(struct wl_client *client, char* label) {
+	struct wl_listener *label_l =
+		wl_client_get_destroy_listener(client, wl_client_label_notify_fn);
+	struct wl_client_label *label_s;
+	if (label_l) {
+		label_s = wl_container_of(label_l, label_s, listener);
+		free(label_s->label);
+	} else if (label == NULL) {
+		return;
+	} else {
+		label_s = calloc(1, sizeof(*label_s));
+		if (label_s == NULL) {
+			sway_log(SWAY_ERROR, "Allocation failed");
+			free(label);
+			return;
+		}
+		label_s->listener.notify = wl_client_label_notify_fn;
+		wl_client_add_destroy_listener(client, &label_s->listener);
+	}
+	label_s->label = label;
 }
