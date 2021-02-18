@@ -1,4 +1,5 @@
 #!/bin/sh
+# vim: set ts=2 sw=2 et :
 
 ## Grimshot: a helper for screenshots within sway
 ## Requirements:
@@ -30,9 +31,9 @@ ACTION=${1:-usage}
 SUBJECT=${2:-screen}
 FILE=${3:-$(getTargetDirectory)/$(date -Ins).png}
 
-if [ "$ACTION" != "save" ] && [ "$ACTION" != "copy" ] && [ "$ACTION" != "check" ]; then
+if [ "$ACTION" != "save" ] && [ "$ACTION" != "copy" ] && [ "$ACTION" != "save-copy" ] && [ "$ACTION" != "check" ]; then
   echo "Usage:"
-  echo "  grimshot [--notify] (copy|save) [active|screen|output|area|window] [FILE]"
+  echo "  grimshot [--notify] (copy|save|save-copy) [active|screen|output|area|window] [FILE]"
   echo "  grimshot check"
   echo "  grimshot usage"
   echo ""
@@ -148,6 +149,9 @@ else
     MESSAGE=$(basename "$FILE")
     notifyOk "$MESSAGE" "$TITLE"
     echo $FILE
+    if [ "$ACTION" = "save-copy" ] ; then
+      wl-copy --type image/png < "$FILE"
+    fi
   else
     notifyError "Error taking screenshot with grim"
   fi
