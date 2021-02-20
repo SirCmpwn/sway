@@ -14,6 +14,13 @@ struct swaybar_pixmap {
 	unsigned char pixels[];
 };
 
+struct swaybar_sni_tool_tip {
+	char *icon_name;
+	list_t *icon_pixmap; // struct swaybar_pixmap *
+	char *title;
+	char *description; // can contain HTML subset <b><i><u><a href=""><img src=" alt="">, see https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/Markup/
+};
+
 struct swaybar_sni_slot {
 	struct wl_list link; // swaybar_sni::slots
 	struct swaybar_sni *sni;
@@ -44,6 +51,10 @@ struct swaybar_sni {
 	list_t *attention_icon_pixmap; // struct swaybar_pixmap *
 	bool item_is_menu;
 	char *menu;
+	struct swaybar_sni_tool_tip *tool_tip;
+	char *title;
+	char *category;
+	char *id;
 	char *icon_theme_path; // non-standard KDE property
 
 	struct wl_list slots; // swaybar_sni_slot::link

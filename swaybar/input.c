@@ -5,6 +5,7 @@
 #include <wayland-cursor.h>
 #include "list.h"
 #include "log.h"
+#include "pango.h"
 #include "swaybar/bar.h"
 #include "swaybar/config.h"
 #include "swaybar/input.h"
@@ -121,8 +122,68 @@ static void wl_pointer_leave(void *data, struct wl_pointer *wl_pointer,
 static void wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
 		uint32_t time, wl_fixed_t surface_x, wl_fixed_t surface_y) {
 	struct swaybar_seat *seat = data;
-	seat->pointer.x = wl_fixed_to_double(surface_x);
-	seat->pointer.y = wl_fixed_to_double(surface_y);
+	struct swaybar_pointer *pointer = &seat->pointer;
+	struct swaybar_output *output = pointer->current;
+
+	pointer->x = wl_fixed_to_double(surface_x);
+	pointer->y = wl_fixed_to_double(surface_y);
+
+	double px = pointer->x * output->scale;
+	double py = pointer->y * output->scale;
+
+	sway_log(SWAY_DEBUG, "wl_pointer_motion");
+	struct swaybar_hotspot *hotspot;
+	wl_list_for_each(hotspot, &output->hotspots, link) {
+		if (px >= hotspot->x && py >= hotspot->y
+				&& px < hotspot->x + hotspot->width
+				&& py < hotspot->y + hotspot->height) {
+			// cursor in hotspot
+			sway_log(SWAY_DEBUG, "wl_pointer_motion cursor in hotspot %d %d", surface_x, surface_y);
+
+			//struct swaybar *bar = seat->bar;
+			struct swaybar *bar = output->bar;
+			struct swaybar_config *config = bar->config;
+
+			// create cairo/pango graphics
+			cairo_surface_t *recorder = cairo_recording_surface_create(CAIRO_CONTENT_COLOR_ALPHA, NULL);
+			cairo_t *cairo = cairo_create(recorder);
+
+			cairo_set_source_u32(cairo, config->colors.focused_statusline);
+
+			//pango_printf(cairo, config->font, output->scale, false, "%s", (struct swaybar_sni *)(hotspot->data)->watcher_id);
+			pango_printf(cairo, config->font, output->scale, false, "%d %d pointer is hovering", surface_x, surface_y);
+
+			// draw icon or menu indicator if needed
+			int text_width, text_height;
+			get_text_size(cairo, config->font, &text_width, &text_height, NULL,
+					output->scale, false, "%d %d pointer is hovering", px ,py);
+			//int padding = config->tray_padding * output->scale;
+			//int width = 2 * padding + text_width;
+			//int height = 2 * padding + text_height;
+
+			//int size = 16;
+			//int x = -2 * padding - size;
+			//int y = height + padding + (text_height - size + 1) / 2;
+
+			cairo_t *shm = output->current_buffer->cairo;
+
+			cairo_save(shm);
+			cairo_set_operator(shm, CAIRO_OPERATOR_CLEAR);
+			cairo_paint(shm);
+			cairo_restore(shm);
+
+			cairo_set_source_surface(shm, recorder, surface_x, surface_y);
+			cairo_paint(shm);
+
+			wl_surface_damage(output->surface, surface_x, surface_y, text_width, text_height);
+			wl_surface_commit(output->surface);
+
+			cairo_surface_destroy(recorder);
+			cairo_destroy(cairo);
+
+			return;
+		}
+	}
 }
 
 static bool check_bindings(struct swaybar *bar, uint32_t button,
@@ -303,7 +364,7 @@ static void wl_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
 	for (uint32_t axis = 0; axis < 2; ++axis) {
 		if (seat->axis[axis].discrete_steps) {
 			for (uint32_t step = 0; step < seat->axis[axis].discrete_steps; ++step) {
-				// Honestly, it would probabyl make sense to pass in
+				// Honestly, it would probably make sense to pass in
 				// 'seat->axis[axis].value / seat->axis[axi].discrete_steps' here,
 				// but it's only used to check whether it's positive or negative
 				// so I don't think it's worth the risk of rounding errors.
