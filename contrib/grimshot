@@ -28,7 +28,7 @@ fi
 
 ACTION=${1:-usage}
 SUBJECT=${2:-screen}
-FILE=${3:-$(getTargetDirectory)/$(date -Ins).png}
+FILE=${3:-$(getTargetDirectory)/$(date +"%Y-%m-%dT%H-%M-%S-%3N").png}
 
 if [ "$ACTION" != "save" ] && [ "$ACTION" != "copy" ] && [ "$ACTION" != "check" ]; then
   echo "Usage:"
