@@ -1295,3 +1295,37 @@ json_object *ipc_json_get_binding_mode(void) {
 			json_object_new_string(config->current_mode->name));
 	return current_mode;
 }
+
+json_object *ipc_json_describe_idle_inhibitor(
+		struct sway_idle_inhibitor_v1 *sway_inhibitor) {
+	json_object *object = json_object_new_object();
+
+	json_object_object_add(object, "active",
+		json_object_new_boolean(
+			sway_idle_inhibit_v1_is_active(sway_inhibitor)));
+
+	const char *type = NULL;
+	struct sway_view *view = NULL;
+	if (sway_inhibitor->mode == INHIBIT_IDLE_APPLICATION) {
+		type = "application";
+		view = view_from_wlr_surface(sway_inhibitor->wlr_inhibitor->surface);
+	} else {
+		type = "user";
+		view = sway_inhibitor->view;
+		json_object_object_add(object, "mode",
+			json_object_new_string(
+				ipc_json_user_idle_inhibitor_description(
+					sway_inhibitor->mode)));
+	}
+
+	if (type) {
+		json_object_object_add(object, "type", json_object_new_string(type));
+	}
+
+	if (view && view->container) {
+		json_object_object_add(object, "container",
+			ipc_json_describe_node(&view->container->node));
+	}
+
+	return object;
+}

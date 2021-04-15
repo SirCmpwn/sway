@@ -36,6 +36,7 @@ enum ipc_command_type {
 	// sway-specific event types
 	IPC_EVENT_BAR_STATE_UPDATE = ((1<<31) | 20),
 	IPC_EVENT_INPUT = ((1<<31) | 21),
+	IPC_EVENT_IDLE_INHIBITOR = ((1<<31) | 22),
 };
 
 #endif
