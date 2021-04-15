@@ -1329,3 +1329,17 @@ json_object *ipc_json_describe_idle_inhibitor(
 
 	return object;
 }
+
+json_object *ipc_json_describe_keyboard_shortcuts_inhibitor(
+		struct sway_keyboard_shortcuts_inhibitor *sway_inhibitor) {
+	json_object *object = json_object_new_object();
+
+	struct sway_view *view = view_from_wlr_surface(
+			sway_inhibitor->inhibitor->surface);
+	if (view && view->container) {
+		json_object_object_add(object, "container",
+			ipc_json_describe_node(&view->container->node));
+	}
+
+	return object;
+}

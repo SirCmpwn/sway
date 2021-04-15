@@ -528,6 +528,24 @@ void ipc_event_idle_inhibitor(struct sway_idle_inhibitor_v1 *inhibitor, const ch
 	json_object_put(obj);
 }
 
+void ipc_event_keyboard_shortcuts_inhibitor(
+		struct sway_keyboard_shortcuts_inhibitor *inhibitor,
+		const char *change) {
+	if (!ipc_has_event_listeners(IPC_EVENT_KEYBOARD_SHORTCUTS_INHIBITOR)) {
+		return;
+	}
+	sway_log(SWAY_DEBUG, "Sending keyboard shortcuts "
+			"inhibitor::%s event", change);
+	json_object *obj = json_object_new_object();
+	json_object_object_add(obj, "change", json_object_new_string(change));
+	json_object_object_add(obj, "keyboard_shortcuts_inhibitor",
+			ipc_json_describe_keyboard_shortcuts_inhibitor(inhibitor));
+
+	const char *json_string = json_object_to_json_string(obj);
+	ipc_send_event(json_string, IPC_EVENT_KEYBOARD_SHORTCUTS_INHIBITOR);
+	json_object_put(obj);
+}
+
 int ipc_client_handle_writable(int client_fd, uint32_t mask, void *data) {
 	struct ipc_client *client = data;
 
@@ -761,6 +779,9 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 				client->subscribed_events |= event_mask(IPC_EVENT_INPUT);
 			} else if (strcmp(event_type, "idle_inhibitor") == 0) {
 				client->subscribed_events |= event_mask(IPC_EVENT_IDLE_INHIBITOR);
+			} else if (strcmp(event_type, "keyboard_shortcuts_inhibitor") == 0) {
+				client->subscribed_events |= event_mask(
+						IPC_EVENT_KEYBOARD_SHORTCUTS_INHIBITOR);
 			} else {
 				const char msg[] = "{\"success\": false}";
 				ipc_send_reply(client, payload_type, msg, strlen(msg));

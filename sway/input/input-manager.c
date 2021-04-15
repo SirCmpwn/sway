@@ -307,6 +307,8 @@ static void handle_keyboard_shortcuts_inhibitor_destroy(
 
 	sway_log(SWAY_DEBUG, "Removing keyboard shortcuts inhibitor");
 
+	ipc_event_keyboard_shortcuts_inhibitor(sway_inhibitor, "destroy");
+
 	// sway_seat::keyboard_shortcuts_inhibitors
 	wl_list_remove(&sway_inhibitor->link);
 	wl_list_remove(&sway_inhibitor->destroy.link);
@@ -329,6 +331,8 @@ static void handle_keyboard_shortcuts_inhibit_new_inhibitor(
 		return;
 	}
 	sway_inhibitor->inhibitor = inhibitor;
+
+	ipc_event_keyboard_shortcuts_inhibitor(sway_inhibitor, "create");
 
 	sway_inhibitor->destroy.notify = handle_keyboard_shortcuts_inhibitor_destroy;
 	wl_signal_add(&inhibitor->events.destroy, &sway_inhibitor->destroy);
@@ -370,6 +374,7 @@ static void handle_keyboard_shortcuts_inhibit_new_inhibitor(
 		return;
 	}
 
+	ipc_event_keyboard_shortcuts_inhibitor(sway_inhibitor, "activate");
 	wlr_keyboard_shortcuts_inhibitor_v1_activate(inhibitor);
 }
 
