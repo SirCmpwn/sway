@@ -19,11 +19,11 @@ static void set_border(struct sway_container *con,
 			view_set_csd_from_server(con->view, false);
 		} else if (!con->view->using_csd && new_border == B_CSD) {
 			view_set_csd_from_server(con->view, true);
-			con->saved_border = con->border;
+			con->saved_border = con->pending.border;
 		}
 	}
 	if (new_border != B_CSD || container_is_floating(con)) {
-		con->border = new_border;
+		con->pending.border = new_border;
 	}
 	if (con->view) {
 		con->view->using_csd = new_border == B_CSD;
@@ -35,7 +35,7 @@ static void border_toggle(struct sway_container *con) {
 		set_border(con, B_NONE);
 		return;
 	}
-	switch (con->border) {
+	switch (con->pending.border) {
 	case B_NONE:
 		set_border(con, B_PIXEL);
 		break;
@@ -88,7 +88,7 @@ struct cmd_results *cmd_border(int argc, char **argv) {
 				"or 'border pixel <px>'");
 	}
 	if (argc == 2) {
-		container->border_thickness = atoi(argv[1]);
+		container->pending.border_thickness = atoi(argv[1]);
 	}
 
 	if (container_is_floating(container)) {

@@ -25,7 +25,7 @@
     THIS SOFTWARE.
   </copyright>
 
-  <interface name="zwlr_layer_shell_v1" version="3">
+  <interface name="zwlr_layer_shell_v1" version="4">
     <description summary="create surfaces that are layers of the desktop">
       Clients can use this interface to assign the surface_layer role to
       wl_surfaces. Such surfaces are assigned to a "layer" of the output and
@@ -46,6 +46,12 @@
         or committed is a client error, and any attempts by a client to attach
         or manipulate a buffer prior to the first layer_surface.configure call
         must also be treated as errors.
+
+        After creating a layer_surface object and setting it up, the client
+        must perform an initial commit without any buffer attached.
+        The compositor will reply with a layer_surface.configure event.
+        The client must acknowledge it and is then allowed to attach a buffer
+        to map the surface.
 
         You may pass NULL for output to allow the compositor to decide which
         output to use. Generally this will be the one that the user most
@@ -94,7 +100,7 @@
     </request>
   </interface>
 
-  <interface name="zwlr_layer_surface_v1" version="3">
+  <interface name="zwlr_layer_surface_v1" version="4">
     <description summary="layer metadata interface">
       An interface that may be implemented by a wl_surface, for surfaces that
       are designed to be rendered as a layer of a stacked desktop-like
@@ -103,6 +109,14 @@
       Layer surface state (layer, size, anchor, exclusive zone,
       margin, interactivity) is double-buffered, and will be applied at the
       time wl_surface.commit of the corresponding wl_surface is called.
+
+      Attaching a null buffer to a layer surface unmaps it.
+
+      Unmapping a layer_surface means that the surface cannot be shown by the
+      compositor until it is explicitly mapped again. The layer_surface
+      returns to the state it had right after layer_shell.get_layer_surface.
+      The client can re-map the surface by performing a commit without any
+      buffer attached, waiting for a configure event and handling it as usual.
     </description>
 
     <request name="set_size">
@@ -189,21 +203,85 @@
       <arg name="left" type="int"/>
     </request>
 
+    <enum name="keyboard_interactivity">
+      <description summary="types of keyboard interaction possible for a layer shell surface">
+        Types of keyboard interaction possible for layer shell surfaces. The
+        rationale for this is twofold: (1) some applications are not interested
+        in keyboard events and not allowing them to be focused can improve the
+        desktop experience; (2) some applications will want to take exclusive
+        keyboard focus.
+      </description>
+
+      <entry name="none" value="0">
+        <description summary="no keyboard focus is possible">
+          This value indicates that this surface is not interested in keyboard
+          events and the compositor should never assign it the keyboard focus.
+
+          This is the default value, set for newly created layer shell surfaces.
+
+          This is useful for e.g. desktop widgets that display information or
+          only have interaction with non-keyboard input devices.
+        </description>
+      </entry>
+      <entry name="exclusive" value="1">
+        <description summary="request exclusive keyboard focus">
+          Request exclusive keyboard focus if this surface is above the shell surface layer.
+
+          For the top and overlay layers, the seat will always give
+          exclusive keyboard focus to the top-most layer which has keyboard
+          interactivity set to exclusive. If this layer contains multiple
+          surfaces with keyboard interactivity set to exclusive, the compositor
+          determines the one receiving keyboard events in an implementation-
+          defined manner. In this case, no guarantee is made when this surface
+          will receive keyboard focus (if ever).
+
+          For the bottom and background layers, the compositor is allowed to use
+          normal focus semantics.
+
+          This setting is mainly intended for applications that need to ensure
+          they receive all keyboard events, such as a lock screen or a password
+          prompt.
+        </description>
+      </entry>
+      <entry name="on_demand" value="2" since="4">
+        <description summary="request regular keyboard focus semantics">
+          This requests the compositor to allow this surface to be focused and
+          unfocused by the user in an implementation-defined manner. The user
+          should be able to unfocus this surface even regardless of the layer
+          it is on.
+
+          Typically, the compositor will want to use its normal mechanism to
+          manage keyboard focus between layer shell surfaces with this setting
+          and regular toplevels on the desktop layer (e.g. click to focus).
+          Nevertheless, it is possible for a compositor to require a special
+          interaction to focus or unfocus layer shell surfaces (e.g. requiring
+          a click even if focus follows the mouse normally, or providing a
+          keybinding to switch focus between layers).
+
+          This setting is mainly intended for desktop shell components (e.g.
+          panels) that allow keyboard interaction. Using this option can allow
+          implementing a desktop shell that can be fully usable without the
+          mouse.
+        </description>
+      </entry>
+    </enum>
+
     <request name="set_keyboard_interactivity">
       <description summary="requests keyboard events">
-        Set to 1 to request that the seat send keyboard events to this layer
-        surface. For layers below the shell surface layer, the seat will use
-        normal focus semantics. For layers above the shell surface layers, the
-        seat will always give exclusive keyboard focus to the top-most layer
-        which has keyboard interactivity set to true.
+        Set how keyboard events are delivered to this surface. By default,
+        layer shell surfaces do not receive keyboard events; this request can
+        be used to change this.
+
+        This setting is inherited by child surfaces set by the get_popup
+        request.
 
         Layer surfaces receive pointer, touch, and tablet events normally. If
         you do not want to receive them, set the input region on your surface
         to an empty region.
 
-        Events is double-buffered, see wl_surface.commit.
+        Keyboard interactivity is double-buffered, see wl_surface.commit.
       </description>
-      <arg name="keyboard_interactivity" type="uint"/>
+      <arg name="keyboard_interactivity" type="uint" enum="keyboard_interactivity"/>
     </request>
 
     <request name="get_popup">
@@ -288,6 +366,7 @@
       <entry name="invalid_surface_state" value="0" summary="provided surface state is invalid"/>
       <entry name="invalid_size" value="1" summary="size is invalid"/>
       <entry name="invalid_anchor" value="2" summary="anchor bitfield is invalid"/>
+      <entry name="invalid_keyboard_interactivity" value="3" summary="keyboard interactivity is invalid"/>
     </enum>
 
     <enum name="anchor" bitfield="true">

@@ -105,8 +105,8 @@ static bool get_surface_box(struct surface_iterator_data *data,
 		data->rotation);
 
 	struct wlr_box box = {
-		.x = data->ox + _sx,
-		.y = data->oy + _sy,
+		.x = floor(data->ox + _sx),
+		.y = floor(data->oy + _sy),
 		.width = sw,
 		.height = sh,
 	};
@@ -206,40 +206,20 @@ void output_layer_for_each_surface(struct sway_output *output,
 	wl_list_for_each(layer_surface, layer_surfaces, link) {
 		struct wlr_layer_surface_v1 *wlr_layer_surface_v1 =
 			layer_surface->layer_surface;
-		output_surface_for_each_surface(output, wlr_layer_surface_v1->surface,
-			layer_surface->geo.x, layer_surface->geo.y, iterator,
-			user_data);
-
-		struct wlr_xdg_popup *state;
-		wl_list_for_each(state, &wlr_layer_surface_v1->popups, link) {
-			struct wlr_xdg_surface *popup = state->base;
-			if (!popup->configured) {
-				continue;
-			}
-
-			double popup_sx, popup_sy;
-			popup_sx = layer_surface->geo.x +
-				popup->popup->geometry.x - popup->geometry.x;
-			popup_sy = layer_surface->geo.y +
-				popup->popup->geometry.y - popup->geometry.y;
-
-			struct wlr_surface *surface = popup->surface;
-
-			struct surface_iterator_data data = {
-				.user_iterator = iterator,
-				.user_data = user_data,
-				.output = output,
-				.view = NULL,
-				.ox = popup_sx,
-				.oy = popup_sy,
-				.width = surface->current.width,
-				.height = surface->current.height,
-				.rotation = 0,
-			};
-
-			wlr_xdg_surface_for_each_surface(
-					popup, output_for_each_surface_iterator, &data);
-		}
+		struct wlr_surface *surface = wlr_layer_surface_v1->surface;
+		struct surface_iterator_data data = {
+			.user_iterator = iterator,
+			.user_data = user_data,
+			.output = output,
+			.view = NULL,
+			.ox = layer_surface->geo.x,
+			.oy = layer_surface->geo.y,
+			.width = surface->current.width,
+			.height = surface->current.height,
+			.rotation = 0,
+		};
+		wlr_layer_surface_v1_for_each_surface(wlr_layer_surface_v1,
+			output_for_each_surface_iterator, &data);
 	}
 }
 
@@ -264,37 +244,20 @@ void output_layer_for_each_popup_surface(struct sway_output *output,
 	wl_list_for_each(layer_surface, layer_surfaces, link) {
 		struct wlr_layer_surface_v1 *wlr_layer_surface_v1 =
 			layer_surface->layer_surface;
-
-		struct wlr_xdg_popup *state;
-		wl_list_for_each(state, &wlr_layer_surface_v1->popups, link) {
-			struct wlr_xdg_surface *popup = state->base;
-			if (!popup->configured) {
-				continue;
-			}
-
-			double popup_sx, popup_sy;
-			popup_sx = layer_surface->geo.x +
-				popup->popup->geometry.x - popup->geometry.x;
-			popup_sy = layer_surface->geo.y +
-				popup->popup->geometry.y - popup->geometry.y;
-
-			struct wlr_surface *surface = popup->surface;
-
-			struct surface_iterator_data data = {
-				.user_iterator = iterator,
-				.user_data = user_data,
-				.output = output,
-				.view = NULL,
-				.ox = popup_sx,
-				.oy = popup_sy,
-				.width = surface->current.width,
-				.height = surface->current.height,
-				.rotation = 0,
-			};
-
-			wlr_xdg_surface_for_each_surface(
-					popup, output_for_each_surface_iterator, &data);
-		}
+		struct wlr_surface *surface = wlr_layer_surface_v1->surface;
+		struct surface_iterator_data data = {
+			.user_iterator = iterator,
+			.user_data = user_data,
+			.output = output,
+			.view = NULL,
+			.ox = layer_surface->geo.x,
+			.oy = layer_surface->geo.y,
+			.width = surface->current.width,
+			.height = surface->current.height,
+			.rotation = 0,
+		};
+		wlr_layer_surface_v1_for_each_popup_surface(wlr_layer_surface_v1,
+			output_for_each_surface_iterator, &data);
 	}
 }
 
@@ -590,6 +553,7 @@ static int output_repaint_timer_handler(void *data) {
 		if (last_scanned_out && !scanned_out) {
 			sway_log(SWAY_DEBUG, "Stopping fullscreen view scan out on %s",
 				output->wlr_output->name);
+			output_damage_whole(output);
 		}
 		last_scanned_out = scanned_out;
 
@@ -816,7 +780,7 @@ static void update_output_manager_config(struct sway_server *server) {
 		struct wlr_box *output_box = wlr_output_layout_get_box(
 			root->output_layout, output->wlr_output);
 		// We mark the output enabled even if it is switched off by DPMS
-		config_head->state.enabled = output->enabled;
+		config_head->state.enabled = output->current_mode != NULL && output->enabled;
 		config_head->state.mode = output->current_mode;
 		if (output_box) {
 			config_head->state.x = output_box->x;

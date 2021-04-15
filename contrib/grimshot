@@ -43,13 +43,13 @@ FILE=${3:-$(getTargetDirectory)/$(date -Ins).png}
 
 if [ "$ACTION" != "save" ] && [ "$ACTION" != "copy" ] && [ "$ACTION" != "check" ]; then
   echo "Usage:"
-  echo "  grimshot [--notify] [--cursor] (copy|save) [active|screen|output|area|window] [FILE]"
+  echo "  grimshot [--notify] [--cursor] (copy|save) [active|screen|output|area|window] [FILE|-]"
   echo "  grimshot check"
   echo "  grimshot usage"
   echo ""
   echo "Commands:"
   echo "  copy: Copy the screenshot data into the clipboard."
-  echo "  save: Save the screenshot to a regular file."
+  echo "  save: Save the screenshot to a regular file or '-' to pipe to STDOUT."
   echo "  check: Verify if required tools are installed and exit."
   echo "  usage: Show this message and exit."
   echo ""

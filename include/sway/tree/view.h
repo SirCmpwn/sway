@@ -316,7 +316,8 @@ void view_map(struct sway_view *view, struct wlr_surface *wlr_surface,
 
 void view_unmap(struct sway_view *view);
 
-void view_update_size(struct sway_view *view, int width, int height);
+void view_update_size(struct sway_view *view);
+void view_center_surface(struct sway_view *view);
 
 void view_child_init(struct sway_view_child *child,
 	const struct sway_view_child_impl *impl, struct sway_view *view,

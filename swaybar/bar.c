@@ -90,7 +90,7 @@ static void layer_surface_closed(void *_output,
 	swaybar_output_free(output);
 }
 
-struct zwlr_layer_surface_v1_listener layer_surface_listener = {
+static const struct zwlr_layer_surface_v1_listener layer_surface_listener = {
 	.configure = layer_surface_configure,
 	.closed = layer_surface_closed,
 };
@@ -230,7 +230,7 @@ static void output_scale(void *data, struct wl_output *wl_output,
 	}
 }
 
-struct wl_output_listener output_listener = {
+static const struct wl_output_listener output_listener = {
 	.geometry = output_geometry,
 	.mode = output_mode,
 	.done = output_done,
@@ -307,7 +307,7 @@ static void xdg_output_handle_description(void *data,
 	}
 }
 
-struct zxdg_output_v1_listener xdg_output_listener = {
+static const struct zxdg_output_v1_listener xdg_output_listener = {
 	.logical_position = xdg_output_handle_logical_position,
 	.logical_size = xdg_output_handle_logical_size,
 	.done = xdg_output_handle_done,

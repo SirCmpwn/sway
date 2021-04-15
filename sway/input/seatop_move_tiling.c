@@ -3,6 +3,7 @@
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/util/edges.h>
 #include "sway/desktop.h"
+#include "sway/desktop/transaction.h"
 #include "sway/input/cursor.h"
 #include "sway/input/seat.h"
 #include "sway/ipc-server.h"
@@ -119,8 +120,8 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 
 	// Deny moving within own workspace if this is the only child
 	struct sway_container *con = node->sway_container;
-	if (workspace_num_tiling_views(e->con->workspace) == 1 &&
-			con->workspace == e->con->workspace) {
+	if (workspace_num_tiling_views(e->con->pending.workspace) == 1 &&
+			con->pending.workspace == e->con->pending.workspace) {
 		e->target_node = NULL;
 		e->target_edge = WLR_EDGE_NONE;
 		return;
@@ -132,8 +133,8 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 		enum wlr_edges edge = WLR_EDGE_NONE;
 		enum sway_container_layout layout = container_parent_layout(con);
 		struct wlr_box parent;
-		con->parent ? container_get_box(con->parent, &parent) :
-			workspace_get_box(con->workspace, &parent);
+		con->pending.parent ? container_get_box(con->pending.parent, &parent) :
+			workspace_get_box(con->pending.workspace, &parent);
 		if (layout == L_HORIZ || layout == L_TABBED) {
 			if (cursor->cursor->y < parent.y + DROP_LAYOUT_BORDER) {
 				edge = WLR_EDGE_TOP;
@@ -160,7 +161,7 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 			desktop_damage_box(&e->drop_box);
 			return;
 		}
-		con = con->parent;
+		con = con->pending.parent;
 	}
 
 	// Use the hovered view - but we must be over the actual surface
@@ -173,23 +174,23 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 	}
 
 	// Find the closest edge
-	size_t thickness = fmin(con->content_width, con->content_height) * 0.3;
+	size_t thickness = fmin(con->pending.content_width, con->pending.content_height) * 0.3;
 	size_t closest_dist = INT_MAX;
 	size_t dist;
 	e->target_edge = WLR_EDGE_NONE;
-	if ((dist = cursor->cursor->y - con->y) < closest_dist) {
+	if ((dist = cursor->cursor->y - con->pending.y) < closest_dist) {
 		closest_dist = dist;
 		e->target_edge = WLR_EDGE_TOP;
 	}
-	if ((dist = cursor->cursor->x - con->x) < closest_dist) {
+	if ((dist = cursor->cursor->x - con->pending.x) < closest_dist) {
 		closest_dist = dist;
 		e->target_edge = WLR_EDGE_LEFT;
 	}
-	if ((dist = con->x + con->width - cursor->cursor->x) < closest_dist) {
+	if ((dist = con->pending.x + con->pending.width - cursor->cursor->x) < closest_dist) {
 		closest_dist = dist;
 		e->target_edge = WLR_EDGE_RIGHT;
 	}
-	if ((dist = con->y + con->height - cursor->cursor->y) < closest_dist) {
+	if ((dist = con->pending.y + con->pending.height - cursor->cursor->y) < closest_dist) {
 		closest_dist = dist;
 		e->target_edge = WLR_EDGE_BOTTOM;
 	}
@@ -199,10 +200,10 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 	}
 
 	e->target_node = node;
-	e->drop_box.x = con->content_x;
-	e->drop_box.y = con->content_y;
-	e->drop_box.width = con->content_width;
-	e->drop_box.height = con->content_height;
+	e->drop_box.x = con->pending.content_x;
+	e->drop_box.y = con->pending.content_y;
+	e->drop_box.width = con->pending.content_width;
+	e->drop_box.height = con->pending.content_height;
 	resize_box(&e->drop_box, e->target_edge, thickness);
 	desktop_damage_box(&e->drop_box);
 }
@@ -214,6 +215,7 @@ static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
 	} else {
 		handle_motion_prethreshold(seat);
 	}
+	transaction_commit_dirty();
 }
 
 static bool is_parallel(enum sway_container_layout layout,
@@ -232,11 +234,11 @@ static void finalize_move(struct sway_seat *seat) {
 	}
 
 	struct sway_container *con = e->con;
-	struct sway_container *old_parent = con->parent;
-	struct sway_workspace *old_ws = con->workspace;
+	struct sway_container *old_parent = con->pending.parent;
+	struct sway_workspace *old_ws = con->pending.workspace;
 	struct sway_node *target_node = e->target_node;
 	struct sway_workspace *new_ws = target_node->type == N_WORKSPACE ?
-		target_node->sway_workspace : target_node->sway_container->workspace;
+		target_node->sway_workspace : target_node->sway_container->pending.workspace;
 	enum wlr_edges edge = e->target_edge;
 	int after = edge != WLR_EDGE_TOP && edge != WLR_EDGE_LEFT;
 	bool swap = edge == WLR_EDGE_NONE && target_node->type == N_CONTAINER;
@@ -283,8 +285,8 @@ static void finalize_move(struct sway_seat *seat) {
 		int index = list_find(siblings, con);
 		struct sway_container *sibling = index == 0 ?
 			siblings->items[1] : siblings->items[index - 1];
-		con->width = sibling->width;
-		con->height = sibling->height;
+		con->pending.width = sibling->pending.width;
+		con->pending.height = sibling->pending.height;
 		con->width_fraction = sibling->width_fraction;
 		con->height_fraction = sibling->height_fraction;
 	}
@@ -294,6 +296,7 @@ static void finalize_move(struct sway_seat *seat) {
 		arrange_workspace(new_ws);
 	}
 
+	transaction_commit_dirty();
 	seatop_begin_default(seat);
 }
 
@@ -348,6 +351,7 @@ void seatop_begin_move_tiling_threshold(struct sway_seat *seat,
 	seat->seatop_data = e;
 
 	container_raise_floating(con);
+	transaction_commit_dirty();
 	wlr_seat_pointer_notify_clear_focus(seat->wlr_seat);
 }
 

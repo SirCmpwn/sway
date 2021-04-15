@@ -7,7 +7,7 @@
 #include "stringop.h"
 
 // must be in order for the bsearch
-static struct cmd_handler input_handlers[] = {
+static const struct cmd_handler input_handlers[] = {
 	{ "accel_profile", input_cmd_accel_profile },
 	{ "calibration_matrix", input_cmd_calibration_matrix },
 	{ "click_method", input_cmd_click_method },
@@ -40,7 +40,7 @@ static struct cmd_handler input_handlers[] = {
 };
 
 // must be in order for the bsearch
-static struct cmd_handler input_config_handlers[] = {
+static const struct cmd_handler input_config_handlers[] = {
 	{ "xkb_capslock", input_cmd_xkb_capslock },
 	{ "xkb_numlock", input_cmd_xkb_numlock },
 };

@@ -8,6 +8,7 @@
 #include <wlr/types/wlr_cursor.h>
 #include "sway/commands.h"
 #include "sway/config.h"
+#include "sway/desktop/transaction.h"
 #include "sway/input/cursor.h"
 #include "sway/input/keyboard.h"
 #include "sway/ipc-server.h"
@@ -642,6 +643,8 @@ void seat_execute_command(struct sway_seat *seat, struct sway_binding *binding) 
 	if (success) {
 		ipc_event_binding(binding);
 	}
+
+	transaction_commit_dirty();
 }
 
 /**

@@ -27,15 +27,15 @@ struct cmd_results *cmd_fullscreen(int argc, char **argv) {
 	}
 
 	// If in the scratchpad, operate on the highest container
-	if (container && !container->workspace) {
-		while (container->parent) {
-			container = container->parent;
+	if (container && !container->pending.workspace) {
+		while (container->pending.parent) {
+			container = container->pending.parent;
 		}
 	}
 
 	bool is_fullscreen = false;
-	for (struct sway_container *curr = container; curr; curr = curr->parent) {
-		if (curr->fullscreen_mode != FULLSCREEN_NONE) {
+	for (struct sway_container *curr = container; curr; curr = curr->pending.parent) {
+		if (curr->pending.fullscreen_mode != FULLSCREEN_NONE) {
 			container = curr;
 			is_fullscreen = true;
 			break;

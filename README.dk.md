@@ -13,7 +13,7 @@ og publiseret på [GitHub](https://github.com/swaywm/sway/releases).
 
 ### Fra Pakker
 
-Sway er tilgængelig i mange distributioner. Prøv at installere pakken "svay". Hvis den ikke er tilgængelig, så tjek [denne wiki-side](https://github.com/swaywm/sway/wiki/Unsupported-packages)
+Sway er tilgængelig i mange distributioner. Prøv at installere pakken "sway". Hvis den ikke er tilgængelig, så tjek [denne wiki-side](https://github.com/swaywm/sway/wiki/Unsupported-packages)
 for information om installation til din(e) distribution(er).
 
 Hvis du er interesseret i at lave en Sway pakke til din distribution, burde du besøge IRC

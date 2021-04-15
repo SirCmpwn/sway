@@ -55,6 +55,37 @@ static void handle_im_commit(struct wl_listener *listener, void *data) {
 	wlr_text_input_v3_send_done(text_input->input);
 }
 
+static void handle_im_keyboard_grab_destroy(struct wl_listener *listener, void *data) {
+	struct sway_input_method_relay *relay = wl_container_of(listener, relay,
+		input_method_keyboard_grab_destroy);
+	struct wlr_input_method_keyboard_grab_v2 *keyboard_grab = data;
+	wl_list_remove(&relay->input_method_keyboard_grab_destroy.link);
+
+	if (keyboard_grab->keyboard) {
+		// send modifier state to original client
+		wlr_seat_keyboard_notify_modifiers(keyboard_grab->input_method->seat,
+			&keyboard_grab->keyboard->modifiers);
+	}
+}
+
+static void handle_im_grab_keyboard(struct wl_listener *listener, void *data) {
+	struct sway_input_method_relay *relay = wl_container_of(listener, relay,
+		input_method_grab_keyboard);
+	struct wlr_input_method_keyboard_grab_v2 *keyboard_grab = data;
+
+	// send modifier state to grab
+	struct wlr_keyboard *active_keyboard = wlr_seat_get_keyboard(relay->seat->wlr_seat);
+	wlr_input_method_keyboard_grab_v2_set_keyboard(keyboard_grab,
+		active_keyboard);
+	wlr_input_method_keyboard_grab_v2_send_modifiers(keyboard_grab,
+		&active_keyboard->modifiers);
+
+	wl_signal_add(&keyboard_grab->events.destroy,
+		&relay->input_method_keyboard_grab_destroy);
+	relay->input_method_keyboard_grab_destroy.notify =
+		handle_im_keyboard_grab_destroy;
+}
+
 static void text_input_set_pending_focused_surface(
 		struct sway_text_input *text_input, struct wlr_surface *surface) {
 	wl_list_remove(&text_input->pending_focused_surface_destroy.link);
@@ -92,13 +123,18 @@ static void relay_send_im_state(struct sway_input_method_relay *relay,
 		return;
 	}
 	// TODO: only send each of those if they were modified
-	wlr_input_method_v2_send_surrounding_text(input_method,
-		input->current.surrounding.text, input->current.surrounding.cursor,
-		input->current.surrounding.anchor);
+	if (input->active_features & WLR_TEXT_INPUT_V3_FEATURE_SURROUNDING_TEXT) {
+		wlr_input_method_v2_send_surrounding_text(input_method,
+			input->current.surrounding.text, input->current.surrounding.cursor,
+			input->current.surrounding.anchor);
+	}
 	wlr_input_method_v2_send_text_change_cause(input_method,
 		input->current.text_change_cause);
-	wlr_input_method_v2_send_content_type(input_method,
-		input->current.content_type.hint, input->current.content_type.purpose);
+	if (input->active_features & WLR_TEXT_INPUT_V3_FEATURE_CONTENT_TYPE) {
+		wlr_input_method_v2_send_content_type(input_method,
+			input->current.content_type.hint,
+			input->current.content_type.purpose);
+	}
 	wlr_input_method_v2_send_done(input_method);
 	// TODO: pass intent, display popup size
 }
@@ -144,6 +180,10 @@ static void handle_text_input_disable(struct wl_listener *listener,
 		void *data) {
 	struct sway_text_input *text_input = wl_container_of(listener, text_input,
 		text_input_disable);
+	if (text_input->input->focused_surface == NULL) {
+		sway_log(SWAY_DEBUG, "Disabling text input, but no longer focused");
+		return;
+	}
 	relay_disable_text_input(text_input->relay, text_input);
 }
 
@@ -236,6 +276,9 @@ static void relay_handle_input_method(struct wl_listener *listener,
 	wl_signal_add(&relay->input_method->events.commit,
 		&relay->input_method_commit);
 	relay->input_method_commit.notify = handle_im_commit;
+	wl_signal_add(&relay->input_method->events.grab_keyboard,
+		&relay->input_method_grab_keyboard);
+	relay->input_method_grab_keyboard.notify = handle_im_grab_keyboard;
 	wl_signal_add(&relay->input_method->events.destroy,
 		&relay->input_method_destroy);
 	relay->input_method_destroy.notify = handle_im_destroy;

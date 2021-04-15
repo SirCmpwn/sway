@@ -16,46 +16,46 @@ static const char expected_syntax[] =
 static void swap_places(struct sway_container *con1,
 		struct sway_container *con2) {
 	struct sway_container *temp = malloc(sizeof(struct sway_container));
-	temp->x = con1->x;
-	temp->y = con1->y;
-	temp->width = con1->width;
-	temp->height = con1->height;
+	temp->pending.x = con1->pending.x;
+	temp->pending.y = con1->pending.y;
+	temp->pending.width = con1->pending.width;
+	temp->pending.height = con1->pending.height;
 	temp->width_fraction = con1->width_fraction;
 	temp->height_fraction = con1->height_fraction;
-	temp->parent = con1->parent;
-	temp->workspace = con1->workspace;
+	temp->pending.parent = con1->pending.parent;
+	temp->pending.workspace = con1->pending.workspace;
 	bool temp_floating = container_is_floating(con1);
 
-	con1->x = con2->x;
-	con1->y = con2->y;
-	con1->width = con2->width;
-	con1->height = con2->height;
+	con1->pending.x = con2->pending.x;
+	con1->pending.y = con2->pending.y;
+	con1->pending.width = con2->pending.width;
+	con1->pending.height = con2->pending.height;
 	con1->width_fraction = con2->width_fraction;
 	con1->height_fraction = con2->height_fraction;
 
-	con2->x = temp->x;
-	con2->y = temp->y;
-	con2->width = temp->width;
-	con2->height = temp->height;
+	con2->pending.x = temp->pending.x;
+	con2->pending.y = temp->pending.y;
+	con2->pending.width = temp->pending.width;
+	con2->pending.height = temp->pending.height;
 	con2->width_fraction = temp->width_fraction;
 	con2->height_fraction = temp->height_fraction;
 
 	int temp_index = container_sibling_index(con1);
-	if (con2->parent) {
-		container_insert_child(con2->parent, con1,
+	if (con2->pending.parent) {
+		container_insert_child(con2->pending.parent, con1,
 				container_sibling_index(con2));
 	} else if (container_is_floating(con2)) {
-		workspace_add_floating(con2->workspace, con1);
+		workspace_add_floating(con2->pending.workspace, con1);
 	} else {
-		workspace_insert_tiling(con2->workspace, con1,
+		workspace_insert_tiling(con2->pending.workspace, con1,
 				container_sibling_index(con2));
 	}
-	if (temp->parent) {
-		container_insert_child(temp->parent, con2, temp_index);
+	if (temp->pending.parent) {
+		container_insert_child(temp->pending.parent, con2, temp_index);
 	} else if (temp_floating) {
-		workspace_add_floating(temp->workspace, con2);
+		workspace_add_floating(temp->pending.workspace, con2);
 	} else {
-		workspace_insert_tiling(temp->workspace, con2, temp_index);
+		workspace_insert_tiling(temp->pending.workspace, con2, temp_index);
 	}
 
 	free(temp);
@@ -65,8 +65,8 @@ static void swap_focus(struct sway_container *con1,
 		struct sway_container *con2, struct sway_seat *seat,
 		struct sway_container *focus) {
 	if (focus == con1 || focus == con2) {
-		struct sway_workspace *ws1 = con1->workspace;
-		struct sway_workspace *ws2 = con2->workspace;
+		struct sway_workspace *ws1 = con1->pending.workspace;
+		struct sway_workspace *ws2 = con2->pending.workspace;
 		enum sway_container_layout layout1 = container_parent_layout(con1);
 		enum sway_container_layout layout2 = container_parent_layout(con2);
 		if (focus == con1 && (layout2 == L_TABBED || layout2 == L_STACKED)) {
@@ -125,8 +125,8 @@ void container_swap(struct sway_container *con1, struct sway_container *con2) {
 		root_scratchpad_remove_container(con2);
 	}
 
-	enum sway_fullscreen_mode fs1 = con1->fullscreen_mode;
-	enum sway_fullscreen_mode fs2 = con2->fullscreen_mode;
+	enum sway_fullscreen_mode fs1 = con1->pending.fullscreen_mode;
+	enum sway_fullscreen_mode fs2 = con2->pending.fullscreen_mode;
 	if (fs1) {
 		container_fullscreen_disable(con1);
 	}
@@ -137,9 +137,9 @@ void container_swap(struct sway_container *con1, struct sway_container *con2) {
 	struct sway_seat *seat = config->handler_context.seat;
 	struct sway_container *focus = seat_get_focused_container(seat);
 	struct sway_workspace *vis1 =
-		output_get_active_workspace(con1->workspace->output);
+		output_get_active_workspace(con1->pending.workspace->output);
 	struct sway_workspace *vis2 =
-		output_get_active_workspace(con2->workspace->output);
+		output_get_active_workspace(con2->pending.workspace->output);
 	if (!sway_assert(vis1 && vis2, "con1 or con2 are on an output without a"
 				"workspace. This should not happen")) {
 		return;

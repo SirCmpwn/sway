@@ -51,7 +51,7 @@ int swaynag_parse_options(int argc, char **argv, struct swaynag *swaynag,
 		TO_PADDING_BTN,
 	};
 
-	static struct option opts[] = {
+	static const struct option opts[] = {
 		{"button", required_argument, NULL, 'b'},
 		{"button-no-terminal", required_argument, NULL, 'B'},
 		{"button-dismiss", required_argument, NULL, 'z'},
@@ -234,7 +234,7 @@ int swaynag_parse_options(int argc, char **argv, struct swaynag *swaynag,
 			}
 			break;
 		case 'v': // Version
-			fprintf(stdout, "swaynag version " SWAY_VERSION "\n");
+			printf("swaynag version " SWAY_VERSION "\n");
 			return -1;
 		case TO_COLOR_BACKGROUND: // Background color
 			if (type && !parse_color(optarg, &type->background)) {

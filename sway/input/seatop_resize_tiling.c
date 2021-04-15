@@ -2,6 +2,7 @@
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/util/edges.h>
 #include "sway/commands.h"
+#include "sway/desktop/transaction.h"
 #include "sway/input/cursor.h"
 #include "sway/input/seat.h"
 #include "sway/tree/arrange.h"
@@ -52,21 +53,22 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 		if (e->h_con) {
 			container_set_resizing(e->h_con, false);
 			container_set_resizing(e->h_sib, false);
-			if (e->h_con->parent) {
-				arrange_container(e->h_con->parent);
+			if (e->h_con->pending.parent) {
+				arrange_container(e->h_con->pending.parent);
 			} else {
-				arrange_workspace(e->h_con->workspace);
+				arrange_workspace(e->h_con->pending.workspace);
 			}
 		}
 		if (e->v_con) {
 			container_set_resizing(e->v_con, false);
 			container_set_resizing(e->v_sib, false);
-			if (e->v_con->parent) {
-				arrange_container(e->v_con->parent);
+			if (e->v_con->pending.parent) {
+				arrange_container(e->v_con->pending.parent);
 			} else {
-				arrange_workspace(e->v_con->workspace);
+				arrange_workspace(e->v_con->pending.workspace);
 			}
 		}
+		transaction_commit_dirty();
 		seatop_begin_default(seat);
 	}
 }
@@ -80,16 +82,16 @@ static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
 
 	if (e->h_con) {
 		if (e->edge & WLR_EDGE_LEFT) {
-			amount_x = (e->h_con_orig_width - moved_x) - e->h_con->width;
+			amount_x = (e->h_con_orig_width - moved_x) - e->h_con->pending.width;
 		} else if (e->edge & WLR_EDGE_RIGHT) {
-			amount_x = (e->h_con_orig_width + moved_x) - e->h_con->width;
+			amount_x = (e->h_con_orig_width + moved_x) - e->h_con->pending.width;
 		}
 	}
 	if (e->v_con) {
 		if (e->edge & WLR_EDGE_TOP) {
-			amount_y = (e->v_con_orig_height - moved_y) - e->v_con->height;
+			amount_y = (e->v_con_orig_height - moved_y) - e->v_con->pending.height;
 		} else if (e->edge & WLR_EDGE_BOTTOM) {
-			amount_y = (e->v_con_orig_height + moved_y) - e->v_con->height;
+			amount_y = (e->v_con_orig_height + moved_y) - e->v_con->pending.height;
 		}
 	}
 
@@ -99,6 +101,7 @@ static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
 	if (amount_y != 0) {
 		container_resize_tiled(e->v_con, e->edge_y, amount_y);
 	}
+	transaction_commit_dirty();
 }
 
 static void handle_unref(struct sway_seat *seat, struct sway_container *con) {
@@ -140,7 +143,7 @@ void seatop_begin_resize_tiling(struct sway_seat *seat,
 		if (e->h_con) {
 			container_set_resizing(e->h_con, true);
 			container_set_resizing(e->h_sib, true);
-			e->h_con_orig_width = e->h_con->width;
+			e->h_con_orig_width = e->h_con->pending.width;
 		}
 	}
 	if (edge & (WLR_EDGE_TOP | WLR_EDGE_BOTTOM)) {
@@ -151,12 +154,13 @@ void seatop_begin_resize_tiling(struct sway_seat *seat,
 		if (e->v_con) {
 			container_set_resizing(e->v_con, true);
 			container_set_resizing(e->v_sib, true);
-			e->v_con_orig_height = e->v_con->height;
+			e->v_con_orig_height = e->v_con->pending.height;
 		}
 	}
 
 	seat->seatop_impl = &seatop_impl;
 	seat->seatop_data = e;
 
+	transaction_commit_dirty();
 	wlr_seat_pointer_notify_clear_focus(seat->wlr_seat);
 }

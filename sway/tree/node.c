@@ -75,7 +75,7 @@ void node_get_box(struct sway_node *node, struct wlr_box *box) {
 struct sway_output *node_get_output(struct sway_node *node) {
 	switch (node->type) {
 	case N_CONTAINER: {
-		struct sway_workspace *ws = node->sway_container->workspace;
+		struct sway_workspace *ws = node->sway_container->pending.workspace;
 		return ws ? ws->output : NULL;
     }
 	case N_WORKSPACE:
@@ -91,7 +91,7 @@ struct sway_output *node_get_output(struct sway_node *node) {
 enum sway_container_layout node_get_layout(struct sway_node *node) {
 	switch (node->type) {
 	case N_CONTAINER:
-		return node->sway_container->layout;
+		return node->sway_container->pending.layout;
 	case N_WORKSPACE:
 		return node->sway_workspace->layout;
 	case N_OUTPUT:
@@ -105,11 +105,11 @@ struct sway_node *node_get_parent(struct sway_node *node) {
 	switch (node->type) {
 	case N_CONTAINER: {
 			struct sway_container *con = node->sway_container;
-			if (con->parent) {
-				return &con->parent->node;
+			if (con->pending.parent) {
+				return &con->pending.parent->node;
 			}
-			if (con->workspace) {
-				return &con->workspace->node;
+			if (con->pending.workspace) {
+				return &con->pending.workspace->node;
 			}
 		}
 		return NULL;
@@ -131,7 +131,7 @@ struct sway_node *node_get_parent(struct sway_node *node) {
 list_t *node_get_children(struct sway_node *node) {
 	switch (node->type) {
 	case N_CONTAINER:
-		return node->sway_container->children;
+		return node->sway_container->pending.children;
 	case N_WORKSPACE:
 		return node->sway_workspace->tiling;
 	case N_OUTPUT:
@@ -143,7 +143,7 @@ list_t *node_get_children(struct sway_node *node) {
 
 bool node_has_ancestor(struct sway_node *node, struct sway_node *ancestor) {
 	if (ancestor->type == N_ROOT && node->type == N_CONTAINER &&
-			node->sway_container->fullscreen_mode == FULLSCREEN_GLOBAL) {
+			node->sway_container->pending.fullscreen_mode == FULLSCREEN_GLOBAL) {
 		return true;
 	}
 	struct sway_node *parent = node_get_parent(node);
@@ -152,7 +152,7 @@ bool node_has_ancestor(struct sway_node *node, struct sway_node *ancestor) {
 			return true;
 		}
 		if (ancestor->type == N_ROOT && parent->type == N_CONTAINER &&
-				parent->sway_container->fullscreen_mode == FULLSCREEN_GLOBAL) {
+				parent->sway_container->pending.fullscreen_mode == FULLSCREEN_GLOBAL) {
 			return true;
 		}
 		parent = node_get_parent(parent);

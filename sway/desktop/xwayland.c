@@ -105,14 +105,10 @@ static void unmanaged_handle_unmap(struct wl_listener *listener, void *data) {
 	if (seat->wlr_seat->keyboard_state.focused_surface == xsurface->surface) {
 		// This simply returns focus to the parent surface if there's one available.
 		// This seems to handle JetBrains issues.
-		if (xsurface->parent && xsurface->parent->surface &&
-				wlr_surface_is_xwayland_surface(xsurface->parent->surface)) {
-			struct wlr_xwayland_surface *next_surface =
-				wlr_xwayland_surface_from_wlr_surface(xsurface->parent->surface);
-			if (wlr_xwayland_or_surface_wants_focus(next_surface)) {
-				seat_set_focus_surface(seat, xsurface->parent->surface, false);
-				return;
-			}
+		if (xsurface->parent && xsurface->parent->surface
+				&& wlr_xwayland_or_surface_wants_focus(xsurface->parent)) {
+			seat_set_focus_surface(seat, xsurface->parent->surface, false);
+			return;
 		}
 
 		// Restore focus
@@ -399,30 +395,31 @@ static void handle_commit(struct wl_listener *listener, void *data) {
 	struct wlr_xwayland_surface *xsurface = view->wlr_xwayland_surface;
 	struct wlr_surface_state *state = &xsurface->surface->current;
 
+	struct wlr_box new_geo;
+	get_geometry(view, &new_geo);
+	bool new_size = new_geo.width != view->geometry.width ||
+			new_geo.height != view->geometry.height ||
+			new_geo.x != view->geometry.x ||
+			new_geo.y != view->geometry.y;
+
+	if (new_size) {
+		// The client changed its surface size in this commit. For floating
+		// containers, we resize the container to match. For tiling containers,
+		// we only recenter the surface.
+		desktop_damage_view(view);
+		memcpy(&view->geometry, &new_geo, sizeof(struct wlr_box));
+		if (container_is_floating(view->container)) {
+			view_update_size(view);
+			transaction_commit_dirty_client();
+		} else {
+			view_center_surface(view);
+		}
+		desktop_damage_view(view);
+	}
+
 	if (view->container->node.instruction) {
-		get_geometry(view, &view->geometry);
 		transaction_notify_view_ready_by_geometry(view,
 				xsurface->x, xsurface->y, state->width, state->height);
-	} else {
-		struct wlr_box new_geo;
-		get_geometry(view, &new_geo);
-
-		if ((new_geo.width != view->geometry.width ||
-					new_geo.height != view->geometry.height ||
-					new_geo.x != view->geometry.x ||
-					new_geo.y != view->geometry.y)) {
-			// The view has unexpectedly sent a new size
-			// eg. The Firefox "Save As" dialog when downloading a file
-			desktop_damage_view(view);
-			view_update_size(view, new_geo.width, new_geo.height);
-			memcpy(&view->geometry, &new_geo, sizeof(struct wlr_box));
-			desktop_damage_view(view);
-			transaction_commit_dirty();
-			transaction_notify_view_ready_by_geometry(view,
-					xsurface->x, xsurface->y, new_geo.width, new_geo.height);
-		} else {
-			memcpy(&view->geometry, &new_geo, sizeof(struct wlr_box));
-		}
 	}
 
 	view_damage_from(view);
@@ -527,10 +524,10 @@ static void handle_request_configure(struct wl_listener *listener, void *data) {
 		view->natural_height = ev->height;
 		container_floating_resize_and_center(view->container);
 
-		configure(view, view->container->content_x,
-				view->container->content_y,
-				view->container->content_width,
-				view->container->content_height);
+		configure(view, view->container->pending.content_x,
+				view->container->pending.content_y,
+				view->container->pending.content_width,
+				view->container->pending.content_height);
 		node_set_dirty(&view->container->node);
 	} else {
 		configure(view, view->container->current.content_x,

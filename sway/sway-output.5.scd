@@ -112,7 +112,7 @@ must be separated by one space. For example:
 *output* <name> toggle
 	Toggle the specified output.
 
-*output* <name> dpms on|off
+*output* <name> dpms on|off|toggle
 	Enables or disables the specified output via DPMS. To turn an output off
 	(ie. blank the screen but keep workspaces as-is), one can set DPMS to off.
 

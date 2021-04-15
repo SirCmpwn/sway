@@ -237,7 +237,10 @@ struct output_config *store_output_config(struct output_config *oc) {
 
 static void set_mode(struct wlr_output *output, int width, int height,
 		float refresh_rate, bool custom) {
-	int mhz = (int)(refresh_rate * 1000);
+	// Not all floating point integers can be represented exactly
+	// as (int)(1000 * mHz / 1000.f)
+	// round() the result to avoid any error
+	int mhz = (int)round(refresh_rate * 1000);
 
 	if (wl_list_empty(&output->modes) || custom) {
 		sway_log(SWAY_DEBUG, "Assigning custom mode to %s", output->name);
@@ -480,6 +483,8 @@ bool apply_output_config(struct output_config *oc, struct sway_output *output) {
 	// this output came online, and some config items (like map_to_output) are
 	// dependent on an output being present.
 	input_manager_configure_all_inputs();
+	// Reconfigure the cursor images, since the scale may have changed.
+	input_manager_configure_xcursor();
 	return true;
 }
 

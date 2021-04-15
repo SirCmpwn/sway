@@ -46,8 +46,8 @@ enum expected_args {
 struct cmd_results *checkarg(int argc, const char *name,
 		enum expected_args type, int val);
 
-struct cmd_handler *find_handler(char *line, struct cmd_handler *cmd_handlers,
-		size_t handlers_size);
+const struct cmd_handler *find_handler(char *line,
+		const struct cmd_handler *cmd_handlers, size_t handlers_size);
 
 /**
  * Parse and executes a command.
@@ -68,7 +68,7 @@ struct cmd_results *config_command(char *command, char **new_block);
  * Parse and handle a sub command
  */
 struct cmd_results *config_subcommand(char **argv, int argc,
-		struct cmd_handler *handlers, size_t handlers_size);
+		const struct cmd_handler *handlers, size_t handlers_size);
 /*
  * Parses a command policy rule.
  */

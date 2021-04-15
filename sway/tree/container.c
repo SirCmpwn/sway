@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <assert.h>
+#include <drm_fourcc.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,12 +31,12 @@ struct sway_container *container_create(struct sway_view *view) {
 		return NULL;
 	}
 	node_init(&c->node, N_CONTAINER, c);
-	c->layout = L_NONE;
+	c->pending.layout = L_NONE;
 	c->view = view;
 	c->alpha = 1.0f;
 
 	if (!view) {
-		c->children = create_list();
+		c->pending.children = create_list();
 		c->current.children = create_list();
 	}
 	c->marks = create_list();
@@ -62,7 +63,7 @@ void container_destroy(struct sway_container *con) {
 	wlr_texture_destroy(con->title_focused_inactive);
 	wlr_texture_destroy(con->title_unfocused);
 	wlr_texture_destroy(con->title_urgent);
-	list_free(con->children);
+	list_free(con->pending.children);
 	list_free(con->current.children);
 	list_free(con->outputs);
 
@@ -90,10 +91,10 @@ void container_begin_destroy(struct sway_container *con) {
 	}
 	// The workspace must have the fullscreen pointer cleared so that the
 	// seat code can find an appropriate new focus.
-	if (con->fullscreen_mode == FULLSCREEN_WORKSPACE && con->workspace) {
-		con->workspace->fullscreen = NULL;
+	if (con->pending.fullscreen_mode == FULLSCREEN_WORKSPACE && con->pending.workspace) {
+		con->pending.workspace->fullscreen = NULL;
 	}
-	if (con->scratchpad && con->fullscreen_mode == FULLSCREEN_GLOBAL) {
+	if (con->scratchpad && con->pending.fullscreen_mode == FULLSCREEN_GLOBAL) {
 		container_fullscreen_disable(con);
 	}
 
@@ -108,11 +109,11 @@ void container_begin_destroy(struct sway_container *con) {
 		root_scratchpad_remove_container(con);
 	}
 
-	if (con->fullscreen_mode == FULLSCREEN_GLOBAL) {
+	if (con->pending.fullscreen_mode == FULLSCREEN_GLOBAL) {
 		container_fullscreen_disable(con);
 	}
 
-	if (con->parent || con->workspace) {
+	if (con->pending.parent || con->pending.workspace) {
 		container_detach(con);
 	}
 }
@@ -121,12 +122,12 @@ void container_reap_empty(struct sway_container *con) {
 	if (con->view) {
 		return;
 	}
-	struct sway_workspace *ws = con->workspace;
+	struct sway_workspace *ws = con->pending.workspace;
 	while (con) {
-		if (con->children->length) {
+		if (con->pending.children->length) {
 			return;
 		}
-		struct sway_container *parent = con->parent;
+		struct sway_container *parent = con->pending.parent;
 		container_begin_destroy(con);
 		con = parent;
 	}
@@ -139,9 +140,9 @@ struct sway_container *container_flatten(struct sway_container *container) {
 	if (container->view) {
 		return NULL;
 	}
-	while (container && container->children->length == 1) {
-		struct sway_container *child = container->children->items[0];
-		struct sway_container *parent = container->parent;
+	while (container && container->pending.children->length == 1) {
+		struct sway_container *child = container->pending.children->items[0];
+		struct sway_container *parent = container->pending.parent;
 		container_replace(container, child);
 		container_begin_destroy(container);
 		container = parent;
@@ -151,11 +152,11 @@ struct sway_container *container_flatten(struct sway_container *container) {
 
 struct sway_container *container_find_child(struct sway_container *container,
 		bool (*test)(struct sway_container *con, void *data), void *data) {
-	if (!container->children) {
+	if (!container->pending.children) {
 		return NULL;
 	}
-	for (int i = 0; i < container->children->length; ++i) {
-		struct sway_container *child = container->children->items[i];
+	for (int i = 0; i < container->pending.children->length; ++i) {
+		struct sway_container *child = container->pending.children->items[i];
 		if (test(child, data)) {
 			return child;
 		}
@@ -310,7 +311,7 @@ static struct sway_container *floating_container_at(double lx, double ly,
 	return NULL;
 }
 
-struct sway_container *view_container_at(struct sway_node *parent,
+static struct sway_container *view_container_content_at(struct sway_node *parent,
 		double lx, double ly,
 		struct wlr_surface **surface, double *sx, double *sy) {
 	if (!sway_assert(node_is_view(parent), "Expected a view")) {
@@ -319,10 +320,33 @@ struct sway_container *view_container_at(struct sway_node *parent,
 
 	struct sway_container *container = parent->sway_container;
 	struct wlr_box box = {
-			.x = container->x,
-			.y = container->y,
-			.width = container->width,
-			.height = container->height,
+			.x = container->pending.content_x,
+			.y = container->pending.content_y,
+			.width = container->pending.content_width,
+			.height = container->pending.content_height,
+	};
+
+	if (wlr_box_contains_point(&box, lx, ly)) {
+		surface_at_view(parent->sway_container, lx, ly, surface, sx, sy);
+		return container;
+	}
+
+	return NULL;
+}
+
+static struct sway_container *view_container_at(struct sway_node *parent,
+		double lx, double ly,
+		struct wlr_surface **surface, double *sx, double *sy) {
+	if (!sway_assert(node_is_view(parent), "Expected a view")) {
+		return NULL;
+	}
+
+	struct sway_container *container = parent->sway_container;
+	struct wlr_box box = {
+			.x = container->pending.x,
+			.y = container->pending.y,
+			.width = container->pending.width,
+			.height = container->pending.height,
 	};
 
 	if (wlr_box_contains_point(&box, lx, ly)) {
@@ -394,7 +418,7 @@ struct sway_container *container_at(struct sway_workspace *workspace,
 	}
 	// Tiling (focused)
 	if (focus && focus->view && !is_floating) {
-		if ((c = surface_at_view(focus, lx, ly, surface, sx, sy))) {
+		if ((c = view_container_content_at(&focus->node, lx, ly, surface, sx, sy))) {
 			return c;
 		}
 	}
@@ -408,19 +432,41 @@ struct sway_container *container_at(struct sway_workspace *workspace,
 void container_for_each_child(struct sway_container *container,
 		void (*f)(struct sway_container *container, void *data),
 		void *data) {
-	if (container->children)  {
-		for (int i = 0; i < container->children->length; ++i) {
-			struct sway_container *child = container->children->items[i];
+	if (container->pending.children)  {
+		for (int i = 0; i < container->pending.children->length; ++i) {
+			struct sway_container *child = container->pending.children->items[i];
 			f(child, data);
 			container_for_each_child(child, f, data);
 		}
 	}
 }
 
+struct sway_container *container_obstructing_fullscreen_container(struct sway_container *container)
+{
+	struct sway_workspace *workspace = container->pending.workspace;
+
+	if (workspace && workspace->fullscreen && !container_is_fullscreen_or_child(container)) {
+		if (container_is_transient_for(container, workspace->fullscreen)) {
+			return NULL;
+		}
+		return workspace->fullscreen;
+	}
+
+	struct sway_container *fullscreen_global = root->fullscreen_global;
+	if (fullscreen_global && container != fullscreen_global && !container_has_ancestor(container, fullscreen_global)) {
+		if (container_is_transient_for(container, fullscreen_global)) {
+			return NULL;
+		}
+		return fullscreen_global;
+	}
+
+	return NULL;
+}
+
 bool container_has_ancestor(struct sway_container *descendant,
 		struct sway_container *ancestor) {
 	while (descendant) {
-		descendant = descendant->parent;
+		descendant = descendant->pending.parent;
 		if (descendant == ancestor) {
 			return true;
 		}
@@ -508,7 +554,7 @@ static void update_title_texture(struct sway_container *con,
 	struct wlr_renderer *renderer = wlr_backend_get_renderer(
 			output->wlr_output->backend);
 	*texture = wlr_texture_from_pixels(
-			renderer, WL_SHM_FORMAT_ARGB8888, stride, width, height, data);
+			renderer, DRM_FORMAT_ARGB8888, stride, width, height, data);
 	cairo_surface_destroy(surface);
 	g_object_unref(pango);
 	cairo_destroy(cairo);
@@ -596,23 +642,23 @@ size_t container_build_representation(enum sway_container_layout layout,
 
 void container_update_representation(struct sway_container *con) {
 	if (!con->view) {
-		size_t len = container_build_representation(con->layout,
-				con->children, NULL);
+		size_t len = container_build_representation(con->pending.layout,
+				con->pending.children, NULL);
 		free(con->formatted_title);
 		con->formatted_title = calloc(len + 1, sizeof(char));
 		if (!sway_assert(con->formatted_title,
 					"Unable to allocate title string")) {
 			return;
 		}
-		container_build_representation(con->layout, con->children,
+		container_build_representation(con->pending.layout, con->pending.children,
 				con->formatted_title);
 		container_calculate_title_height(con);
 		container_update_title_textures(con);
 	}
-	if (con->parent) {
-		container_update_representation(con->parent);
-	} else if (con->workspace) {
-		workspace_update_representation(con->workspace);
+	if (con->pending.parent) {
+		container_update_representation(con->pending.parent);
+	} else if (con->pending.workspace) {
+		workspace_update_representation(con->pending.workspace);
 	}
 }
 
@@ -663,20 +709,20 @@ static void floating_natural_resize(struct sway_container *con) {
 	floating_calculate_constraints(&min_width, &max_width,
 			&min_height, &max_height);
 	if (!con->view) {
-		con->width = fmax(min_width, fmin(con->width, max_width));
-		con->height = fmax(min_height, fmin(con->height, max_height));
+		con->pending.width = fmax(min_width, fmin(con->pending.width, max_width));
+		con->pending.height = fmax(min_height, fmin(con->pending.height, max_height));
 	} else {
 		struct sway_view *view = con->view;
-		con->content_width =
+		con->pending.content_width =
 			fmax(min_width, fmin(view->natural_width, max_width));
-		con->content_height =
+		con->pending.content_height =
 			fmax(min_height, fmin(view->natural_height, max_height));
 		container_set_geometry_from_content(con);
 	}
 }
 
 void container_floating_resize_and_center(struct sway_container *con) {
-	struct sway_workspace *ws = con->workspace;
+	struct sway_workspace *ws = con->pending.workspace;
 	if (!ws) {
 		// On scratchpad, just resize
 		floating_natural_resize(con);
@@ -687,42 +733,42 @@ void container_floating_resize_and_center(struct sway_container *con) {
 			ws->output->wlr_output);
 	if (!ob) {
 		// On NOOP output. Will be called again when moved to an output
-		con->x = 0;
-		con->y = 0;
-		con->width = 0;
-		con->height = 0;
+		con->pending.x = 0;
+		con->pending.y = 0;
+		con->pending.width = 0;
+		con->pending.height = 0;
 		return;
 	}
 
 	floating_natural_resize(con);
 	if (!con->view) {
-		if (con->width > ws->width || con->height > ws->height) {
-			con->x = ob->x + (ob->width - con->width) / 2;
-			con->y = ob->y + (ob->height - con->height) / 2;
+		if (con->pending.width > ws->width || con->pending.height > ws->height) {
+			con->pending.x = ob->x + (ob->width - con->pending.width) / 2;
+			con->pending.y = ob->y + (ob->height - con->pending.height) / 2;
 		} else {
-			con->x = ws->x + (ws->width - con->width) / 2;
-			con->y = ws->y + (ws->height - con->height) / 2;
+			con->pending.x = ws->x + (ws->width - con->pending.width) / 2;
+			con->pending.y = ws->y + (ws->height - con->pending.height) / 2;
 		}
 	} else {
-		if (con->content_width > ws->width
-				|| con->content_height > ws->height) {
-			con->content_x = ob->x + (ob->width - con->content_width) / 2;
-			con->content_y = ob->y + (ob->height - con->content_height) / 2;
+		if (con->pending.content_width > ws->width
+				|| con->pending.content_height > ws->height) {
+			con->pending.content_x = ob->x + (ob->width - con->pending.content_width) / 2;
+			con->pending.content_y = ob->y + (ob->height - con->pending.content_height) / 2;
 		} else {
-			con->content_x = ws->x + (ws->width - con->content_width) / 2;
-			con->content_y = ws->y + (ws->height - con->content_height) / 2;
+			con->pending.content_x = ws->x + (ws->width - con->pending.content_width) / 2;
+			con->pending.content_y = ws->y + (ws->height - con->pending.content_height) / 2;
 		}
 
 		// If the view's border is B_NONE then these properties are ignored.
-		con->border_top = con->border_bottom = true;
-		con->border_left = con->border_right = true;
+		con->pending.border_top = con->pending.border_bottom = true;
+		con->pending.border_left = con->pending.border_right = true;
 
 		container_set_geometry_from_content(con);
 	}
 }
 
 void container_floating_set_default_size(struct sway_container *con) {
-	if (!sway_assert(con->workspace, "Expected a container on a workspace")) {
+	if (!sway_assert(con->pending.workspace, "Expected a container on a workspace")) {
 		return;
 	}
 
@@ -730,16 +776,16 @@ void container_floating_set_default_size(struct sway_container *con) {
 	floating_calculate_constraints(&min_width, &max_width,
 			&min_height, &max_height);
 	struct wlr_box *box = calloc(1, sizeof(struct wlr_box));
-	workspace_get_box(con->workspace, box);
+	workspace_get_box(con->pending.workspace, box);
 
 	double width = fmax(min_width, fmin(box->width * 0.5, max_width));
 	double height = fmax(min_height, fmin(box->height * 0.75, max_height));
 	if (!con->view) {
-		con->width = width;
-		con->height = height;
+		con->pending.width = width;
+		con->pending.height = height;
 	} else {
-		con->content_width = width;
-		con->content_height = height;
+		con->pending.content_width = width;
+		con->pending.content_height = height;
 		container_set_geometry_from_content(con);
 	}
 
@@ -761,8 +807,8 @@ void container_set_resizing(struct sway_container *con, bool resizing) {
 			con->view->impl->set_resizing(con->view, resizing);
 		}
 	} else {
-		for (int i = 0; i < con->children->length; ++i ) {
-			struct sway_container *child = con->children->items[i];
+		for (int i = 0; i < con->pending.children->length; ++i ) {
+			struct sway_container *child = con->pending.children->items[i];
 			container_set_resizing(child, resizing);
 		}
 	}
@@ -774,21 +820,27 @@ void container_set_floating(struct sway_container *container, bool enable) {
 	}
 
 	struct sway_seat *seat = input_manager_current_seat();
-	struct sway_workspace *workspace = container->workspace;
+	struct sway_workspace *workspace = container->pending.workspace;
+	struct sway_container *focus = seat_get_focused_container(seat);
+	bool set_focus = focus == container;
 
 	if (enable) {
-		struct sway_container *old_parent = container->parent;
+		struct sway_container *old_parent = container->pending.parent;
 		container_detach(container);
 		workspace_add_floating(workspace, container);
 		if (container->view) {
 			view_set_tiled(container->view, false);
 			if (container->view->using_csd) {
-				container->border = B_CSD;
+				container->pending.border = B_CSD;
 			}
 		}
 		container_floating_set_default_size(container);
 		container_floating_resize_and_center(container);
 		if (old_parent) {
+			if (set_focus) {
+				seat_set_raw_focus(seat, &old_parent->node);
+				seat_set_raw_focus(seat, &container->node);
+			}
 			container_reap_empty(old_parent);
 		}
 	} else {
@@ -800,19 +852,23 @@ void container_set_floating(struct sway_container *container, bool enable) {
 		struct sway_container *reference =
 			seat_get_focus_inactive_tiling(seat, workspace);
 		if (reference) {
-			container_add_sibling(reference, container, 1);
-			container->width = reference->width;
-			container->height = reference->height;
+			if (reference->view) {
+				container_add_sibling(reference, container, 1);
+			} else {
+				container_add_child(reference, container);
+			}
+			container->pending.width = reference->pending.width;
+			container->pending.height = reference->pending.height;
 		} else {
 			struct sway_container *other =
 				workspace_add_tiling(workspace, container);
-			other->width = workspace->width;
-			other->height = workspace->height;
+			other->pending.width = workspace->width;
+			other->pending.height = workspace->height;
 		}
 		if (container->view) {
 			view_set_tiled(container->view, true);
 			if (container->view->using_csd) {
-				container->border = container->saved_border;
+				container->pending.border = container->saved_border;
 			}
 		}
 		container->width_fraction = 0;
@@ -834,22 +890,33 @@ void container_set_geometry_from_content(struct sway_container *con) {
 	size_t border_width = 0;
 	size_t top = 0;
 
-	if (con->border != B_CSD) {
-		border_width = con->border_thickness * (con->border != B_NONE);
-		top = con->border == B_NORMAL ?
+	if (con->pending.border != B_CSD) {
+		border_width = con->pending.border_thickness * (con->pending.border != B_NONE);
+		top = con->pending.border == B_NORMAL ?
 			container_titlebar_height() : border_width;
 	}
 
-	con->x = con->content_x - border_width;
-	con->y = con->content_y - top;
-	con->width = con->content_width + border_width * 2;
-	con->height = top + con->content_height + border_width;
+	con->pending.x = con->pending.content_x - border_width;
+	con->pending.y = con->pending.content_y - top;
+	con->pending.width = con->pending.content_width + border_width * 2;
+	con->pending.height = top + con->pending.content_height + border_width;
 	node_set_dirty(&con->node);
 }
 
 bool container_is_floating(struct sway_container *container) {
-	if (!container->parent && container->workspace &&
-			list_find(container->workspace->floating, container) != -1) {
+	if (!container->pending.parent && container->pending.workspace &&
+			list_find(container->pending.workspace->floating, container) != -1) {
+		return true;
+	}
+	if (container->scratchpad) {
+		return true;
+	}
+	return false;
+}
+
+bool container_is_current_floating(struct sway_container *container) {
+	if (!container->current.parent && container->current.workspace &&
+			list_find(container->current.workspace->floating, container) != -1) {
 		return true;
 	}
 	if (container->scratchpad) {
@@ -859,10 +926,10 @@ bool container_is_floating(struct sway_container *container) {
 }
 
 void container_get_box(struct sway_container *container, struct wlr_box *box) {
-	box->x = container->x;
-	box->y = container->y;
-	box->width = container->width;
-	box->height = container->height;
+	box->x = container->pending.x;
+	box->y = container->pending.y;
+	box->width = container->pending.width;
+	box->height = container->pending.height;
 }
 
 /**
@@ -870,14 +937,14 @@ void container_get_box(struct sway_container *container, struct wlr_box *box) {
  */
 void container_floating_translate(struct sway_container *con,
 		double x_amount, double y_amount) {
-	con->x += x_amount;
-	con->y += y_amount;
-	con->content_x += x_amount;
-	con->content_y += y_amount;
+	con->pending.x += x_amount;
+	con->pending.y += y_amount;
+	con->pending.content_x += x_amount;
+	con->pending.content_y += y_amount;
 
-	if (con->children) {
-		for (int i = 0; i < con->children->length; ++i) {
-			struct sway_container *child = con->children->items[i];
+	if (con->pending.children) {
+		for (int i = 0; i < con->pending.children->length; ++i) {
+			struct sway_container *child = con->pending.children->items[i];
 			container_floating_translate(child, x_amount, y_amount);
 		}
 	}
@@ -893,8 +960,8 @@ void container_floating_translate(struct sway_container *con,
  * center.
  */
 struct sway_output *container_floating_find_output(struct sway_container *con) {
-	double center_x = con->x + con->width / 2;
-	double center_y = con->y + con->height / 2;
+	double center_x = con->pending.x + con->pending.width / 2;
+	double center_y = con->pending.y + con->pending.height / 2;
 	struct sway_output *closest_output = NULL;
 	double closest_distance = DBL_MAX;
 	for (int i = 0; i < root->outputs->length; ++i) {
@@ -925,11 +992,11 @@ void container_floating_move_to(struct sway_container *con,
 			"Expected a floating container")) {
 		return;
 	}
-	container_floating_translate(con, lx - con->x, ly - con->y);
+	container_floating_translate(con, lx - con->pending.x, ly - con->pending.y);
 	if (container_is_scratchpad_hidden(con)) {
 		return;
 	}
-	struct sway_workspace *old_workspace = con->workspace;
+	struct sway_workspace *old_workspace = con->pending.workspace;
 	struct sway_output *new_output = container_floating_find_output(con);
 	if (!sway_assert(new_output, "Unable to find any output")) {
 		return;
@@ -951,10 +1018,10 @@ void container_floating_move_to_center(struct sway_container *con) {
 			"Expected a floating container")) {
 		return;
 	}
-	struct sway_workspace *ws = con->workspace;
-	double new_lx = ws->x + (ws->width - con->width) / 2;
-	double new_ly = ws->y + (ws->height - con->height) / 2;
-	container_floating_translate(con, new_lx - con->x, new_ly - con->y);
+	struct sway_workspace *ws = con->pending.workspace;
+	double new_lx = ws->x + (ws->width - con->pending.width) / 2;
+	double new_ly = ws->y + (ws->height - con->pending.height) / 2;
+	container_floating_translate(con, new_lx - con->pending.x, new_ly - con->pending.y);
 }
 
 static bool find_urgent_iterator(struct sway_container *con, void *data) {
@@ -987,27 +1054,27 @@ static void set_fullscreen_iterator(struct sway_container *con, void *data) {
 }
 
 static void container_fullscreen_workspace(struct sway_container *con) {
-	if (!sway_assert(con->fullscreen_mode == FULLSCREEN_NONE,
+	if (!sway_assert(con->pending.fullscreen_mode == FULLSCREEN_NONE,
 				"Expected a non-fullscreen container")) {
 		return;
 	}
 	bool enable = true;
 	set_fullscreen_iterator(con, &enable);
 	container_for_each_child(con, set_fullscreen_iterator, &enable);
-	con->fullscreen_mode = FULLSCREEN_WORKSPACE;
+	con->pending.fullscreen_mode = FULLSCREEN_WORKSPACE;
 
-	con->saved_x = con->x;
-	con->saved_y = con->y;
-	con->saved_width = con->width;
-	con->saved_height = con->height;
+	con->saved_x = con->pending.x;
+	con->saved_y = con->pending.y;
+	con->saved_width = con->pending.width;
+	con->saved_height = con->pending.height;
 
-	if (con->workspace) {
-		con->workspace->fullscreen = con;
+	if (con->pending.workspace) {
+		con->pending.workspace->fullscreen = con;
 		struct sway_seat *seat;
 		struct sway_workspace *focus_ws;
 		wl_list_for_each(seat, &server.input->seats, link) {
 			focus_ws = seat_get_focused_workspace(seat);
-			if (focus_ws == con->workspace) {
+			if (focus_ws == con->pending.workspace) {
 				seat_set_focus_container(seat, con);
 			} else {
 				struct sway_node *focus =
@@ -1023,7 +1090,7 @@ static void container_fullscreen_workspace(struct sway_container *con) {
 }
 
 static void container_fullscreen_global(struct sway_container *con) {
-	if (!sway_assert(con->fullscreen_mode == FULLSCREEN_NONE,
+	if (!sway_assert(con->pending.fullscreen_mode == FULLSCREEN_NONE,
 				"Expected a non-fullscreen container")) {
 		return;
 	}
@@ -1032,10 +1099,10 @@ static void container_fullscreen_global(struct sway_container *con) {
 	container_for_each_child(con, set_fullscreen_iterator, &enable);
 
 	root->fullscreen_global = con;
-	con->saved_x = con->x;
-	con->saved_y = con->y;
-	con->saved_width = con->width;
-	con->saved_height = con->height;
+	con->saved_x = con->pending.x;
+	con->saved_y = con->pending.y;
+	con->saved_width = con->pending.width;
+	con->saved_height = con->pending.height;
 
 	struct sway_seat *seat;
 	wl_list_for_each(seat, &server.input->seats, link) {
@@ -1045,13 +1112,13 @@ static void container_fullscreen_global(struct sway_container *con) {
 		}
 	}
 
-	con->fullscreen_mode = FULLSCREEN_GLOBAL;
+	con->pending.fullscreen_mode = FULLSCREEN_GLOBAL;
 	container_end_mouse_operation(con);
 	ipc_event_window(con, "fullscreen_mode");
 }
 
 void container_fullscreen_disable(struct sway_container *con) {
-	if (!sway_assert(con->fullscreen_mode != FULLSCREEN_NONE,
+	if (!sway_assert(con->pending.fullscreen_mode != FULLSCREEN_NONE,
 				"Expected a fullscreen container")) {
 		return;
 	}
@@ -1060,19 +1127,19 @@ void container_fullscreen_disable(struct sway_container *con) {
 	container_for_each_child(con, set_fullscreen_iterator, &enable);
 
 	if (container_is_floating(con)) {
-		con->x = con->saved_x;
-		con->y = con->saved_y;
-		con->width = con->saved_width;
-		con->height = con->saved_height;
+		con->pending.x = con->saved_x;
+		con->pending.y = con->saved_y;
+		con->pending.width = con->saved_width;
+		con->pending.height = con->saved_height;
 	}
 
-	if (con->fullscreen_mode == FULLSCREEN_WORKSPACE) {
-		if (con->workspace) {
-			con->workspace->fullscreen = NULL;
+	if (con->pending.fullscreen_mode == FULLSCREEN_WORKSPACE) {
+		if (con->pending.workspace) {
+			con->pending.workspace->fullscreen = NULL;
 			if (container_is_floating(con)) {
 				struct sway_output *output =
 					container_floating_find_output(con);
-				if (con->workspace->output != output) {
+				if (con->pending.workspace->output != output) {
 					container_floating_move_to_center(con);
 				}
 			}
@@ -1084,11 +1151,11 @@ void container_fullscreen_disable(struct sway_container *con) {
 	// If the container was mapped as fullscreen and set as floating by
 	// criteria, it needs to be reinitialized as floating to get the proper
 	// size and location
-	if (container_is_floating(con) && (con->width == 0 || con->height == 0)) {
+	if (container_is_floating(con) && (con->pending.width == 0 || con->pending.height == 0)) {
 		container_floating_resize_and_center(con);
 	}
 
-	con->fullscreen_mode = FULLSCREEN_NONE;
+	con->pending.fullscreen_mode = FULLSCREEN_NONE;
 	container_end_mouse_operation(con);
 	ipc_event_window(con, "fullscreen_mode");
 
@@ -1106,7 +1173,7 @@ void container_fullscreen_disable(struct sway_container *con) {
 
 void container_set_fullscreen(struct sway_container *con,
 		enum sway_fullscreen_mode mode) {
-	if (con->fullscreen_mode == mode) {
+	if (con->pending.fullscreen_mode == mode) {
 		return;
 	}
 
@@ -1118,8 +1185,8 @@ void container_set_fullscreen(struct sway_container *con,
 		if (root->fullscreen_global) {
 			container_fullscreen_disable(root->fullscreen_global);
 		}
-		if (con->workspace && con->workspace->fullscreen) {
-			container_fullscreen_disable(con->workspace->fullscreen);
+		if (con->pending.workspace && con->pending.workspace->fullscreen) {
+			container_fullscreen_disable(con->pending.workspace->fullscreen);
 		}
 		container_fullscreen_workspace(con);
 		break;
@@ -1127,7 +1194,7 @@ void container_set_fullscreen(struct sway_container *con,
 		if (root->fullscreen_global) {
 			container_fullscreen_disable(root->fullscreen_global);
 		}
-		if (con->fullscreen_mode == FULLSCREEN_WORKSPACE) {
+		if (con->pending.fullscreen_mode == FULLSCREEN_WORKSPACE) {
 			container_fullscreen_disable(con);
 		}
 		container_fullscreen_global(con);
@@ -1137,8 +1204,8 @@ void container_set_fullscreen(struct sway_container *con,
 
 struct sway_container *container_toplevel_ancestor(
 		struct sway_container *container) {
-	while (container->parent) {
-		container = container->parent;
+	while (container->pending.parent) {
+		container = container->pending.parent;
 	}
 
 	return container;
@@ -1150,10 +1217,10 @@ bool container_is_floating_or_child(struct sway_container *container) {
 
 bool container_is_fullscreen_or_child(struct sway_container *container) {
 	do {
-		if (container->fullscreen_mode) {
+		if (container->pending.fullscreen_mode) {
 			return true;
 		}
-		container = container->parent;
+		container = container->pending.parent;
 	} while (container);
 
 	return false;
@@ -1226,11 +1293,11 @@ void container_discover_outputs(struct sway_container *con) {
 }
 
 enum sway_container_layout container_parent_layout(struct sway_container *con) {
-	if (con->parent) {
-		return con->parent->layout;
+	if (con->pending.parent) {
+		return con->pending.parent->pending.layout;
 	}
-	if (con->workspace) {
-		return con->workspace->layout;
+	if (con->pending.workspace) {
+		return con->pending.workspace->layout;
 	}
 	return L_NONE;
 }
@@ -1244,16 +1311,16 @@ enum sway_container_layout container_current_parent_layout(
 }
 
 list_t *container_get_siblings(struct sway_container *container) {
-	if (container->parent) {
-		return container->parent->children;
+	if (container->pending.parent) {
+		return container->pending.parent->pending.children;
 	}
 	if (container_is_scratchpad_hidden(container)) {
 		return NULL;
 	}
-	if (list_find(container->workspace->tiling, container) != -1) {
-		return container->workspace->tiling;
+	if (list_find(container->pending.workspace->tiling, container) != -1) {
+		return container->pending.workspace->tiling;
 	}
-	return container->workspace->floating;
+	return container->pending.workspace->floating;
 }
 
 int container_sibling_index(struct sway_container *child) {
@@ -1268,30 +1335,30 @@ list_t *container_get_current_siblings(struct sway_container *container) {
 }
 
 void container_handle_fullscreen_reparent(struct sway_container *con) {
-	if (con->fullscreen_mode != FULLSCREEN_WORKSPACE || !con->workspace ||
-			con->workspace->fullscreen == con) {
+	if (con->pending.fullscreen_mode != FULLSCREEN_WORKSPACE || !con->pending.workspace ||
+			con->pending.workspace->fullscreen == con) {
 		return;
 	}
-	if (con->workspace->fullscreen) {
-		container_fullscreen_disable(con->workspace->fullscreen);
+	if (con->pending.workspace->fullscreen) {
+		container_fullscreen_disable(con->pending.workspace->fullscreen);
 	}
-	con->workspace->fullscreen = con;
+	con->pending.workspace->fullscreen = con;
 
-	arrange_workspace(con->workspace);
+	arrange_workspace(con->pending.workspace);
 }
 
 static void set_workspace(struct sway_container *container, void *data) {
-	container->workspace = container->parent->workspace;
+	container->pending.workspace = container->pending.parent->pending.workspace;
 }
 
 void container_insert_child(struct sway_container *parent,
 		struct sway_container *child, int i) {
-	if (child->workspace) {
+	if (child->pending.workspace) {
 		container_detach(child);
 	}
-	list_insert(parent->children, i, child);
-	child->parent = parent;
-	child->workspace = parent->workspace;
+	list_insert(parent->pending.children, i, child);
+	child->pending.parent = parent;
+	child->pending.workspace = parent->pending.workspace;
 	container_for_each_child(child, set_workspace, NULL);
 	container_handle_fullscreen_reparent(child);
 	container_update_representation(parent);
@@ -1299,14 +1366,14 @@ void container_insert_child(struct sway_container *parent,
 
 void container_add_sibling(struct sway_container *fixed,
 		struct sway_container *active, bool after) {
-	if (active->workspace) {
+	if (active->pending.workspace) {
 		container_detach(active);
 	}
 	list_t *siblings = container_get_siblings(fixed);
 	int index = list_find(siblings, fixed);
 	list_insert(siblings, index + after, active);
-	active->parent = fixed->parent;
-	active->workspace = fixed->workspace;
+	active->pending.parent = fixed->pending.parent;
+	active->pending.workspace = fixed->pending.workspace;
 	container_for_each_child(active, set_workspace, NULL);
 	container_handle_fullscreen_reparent(active);
 	container_update_representation(active);
@@ -1314,15 +1381,15 @@ void container_add_sibling(struct sway_container *fixed,
 
 void container_add_child(struct sway_container *parent,
 		struct sway_container *child) {
-	if (child->workspace) {
+	if (child->pending.workspace) {
 		container_detach(child);
 	}
-	list_add(parent->children, child);
-	child->parent = parent;
-	child->workspace = parent->workspace;
+	list_add(parent->pending.children, child);
+	child->pending.parent = parent;
+	child->pending.workspace = parent->pending.workspace;
 	container_for_each_child(child, set_workspace, NULL);
-	bool fullscreen = child->fullscreen_mode != FULLSCREEN_NONE ||
-		parent->fullscreen_mode != FULLSCREEN_NONE;
+	bool fullscreen = child->pending.fullscreen_mode != FULLSCREEN_NONE ||
+		parent->pending.fullscreen_mode != FULLSCREEN_NONE;
 	set_fullscreen_iterator(child, &fullscreen);
 	container_for_each_child(child, set_fullscreen_iterator, &fullscreen);
 	container_handle_fullscreen_reparent(child);
@@ -1332,15 +1399,15 @@ void container_add_child(struct sway_container *parent,
 }
 
 void container_detach(struct sway_container *child) {
-	if (child->fullscreen_mode == FULLSCREEN_WORKSPACE) {
-		child->workspace->fullscreen = NULL;
+	if (child->pending.fullscreen_mode == FULLSCREEN_WORKSPACE) {
+		child->pending.workspace->fullscreen = NULL;
 	}
-	if (child->fullscreen_mode == FULLSCREEN_GLOBAL) {
+	if (child->pending.fullscreen_mode == FULLSCREEN_GLOBAL) {
 		root->fullscreen_global = NULL;
 	}
 
-	struct sway_container *old_parent = child->parent;
-	struct sway_workspace *old_workspace = child->workspace;
+	struct sway_container *old_parent = child->pending.parent;
+	struct sway_workspace *old_workspace = child->pending.workspace;
 	list_t *siblings = container_get_siblings(child);
 	if (siblings) {
 		int index = list_find(siblings, child);
@@ -1348,8 +1415,8 @@ void container_detach(struct sway_container *child) {
 			list_del(siblings, index);
 		}
 	}
-	child->parent = NULL;
-	child->workspace = NULL;
+	child->pending.parent = NULL;
+	child->pending.workspace = NULL;
 	container_for_each_child(child, set_workspace, NULL);
 
 	if (old_parent) {
@@ -1364,18 +1431,18 @@ void container_detach(struct sway_container *child) {
 
 void container_replace(struct sway_container *container,
 		struct sway_container *replacement) {
-	enum sway_fullscreen_mode fullscreen = container->fullscreen_mode;
+	enum sway_fullscreen_mode fullscreen = container->pending.fullscreen_mode;
 	bool scratchpad = container->scratchpad;
 	struct sway_workspace *ws = NULL;
 	if (fullscreen != FULLSCREEN_NONE) {
 		container_fullscreen_disable(container);
 	}
 	if (scratchpad) {
-		ws = container->workspace;
+		ws = container->pending.workspace;
 		root_scratchpad_show(container);
 		root_scratchpad_remove_container(container);
 	}
-	if (container->parent || container->workspace) {
+	if (container->pending.parent || container->pending.workspace) {
 		float width_fraction = container->width_fraction;
 		float height_fraction = container->height_fraction;
 		container_add_sibling(container, replacement, 1);
@@ -1403,7 +1470,7 @@ struct sway_container *container_split(struct sway_container *child,
 		enum sway_container_layout layout) {
 	// i3 doesn't split singleton H/V containers
 	// https://github.com/i3/i3/blob/3cd1c45eba6de073bc4300eebb4e1cc1a0c4479a/src/tree.c#L354
-	if (child->parent || child->workspace) {
+	if (child->pending.parent || child->pending.workspace) {
 		list_t *siblings = container_get_siblings(child);
 		if (siblings->length == 1) {
 			enum sway_container_layout current = container_parent_layout(child);
@@ -1411,12 +1478,12 @@ struct sway_container *container_split(struct sway_container *child,
 				current = L_NONE;
 			}
 			if (current == L_HORIZ || current == L_VERT) {
-				if (child->parent) {
-					child->parent->layout = layout;
-					container_update_representation(child->parent);
+				if (child->pending.parent) {
+					child->pending.parent->pending.layout = layout;
+					container_update_representation(child->pending.parent);
 				} else {
-					child->workspace->layout = layout;
-					workspace_update_representation(child->workspace);
+					child->pending.workspace->layout = layout;
+					workspace_update_representation(child->pending.workspace);
 				}
 				return child;
 			}
@@ -1429,25 +1496,25 @@ struct sway_container *container_split(struct sway_container *child,
 	if (container_is_floating(child) && child->view) {
 		view_set_tiled(child->view, true);
 		if (child->view->using_csd) {
-			child->border = child->saved_border;
+			child->pending.border = child->saved_border;
 		}
 	}
 
 	struct sway_container *cont = container_create(NULL);
-	cont->width = child->width;
-	cont->height = child->height;
+	cont->pending.width = child->pending.width;
+	cont->pending.height = child->pending.height;
 	cont->width_fraction = child->width_fraction;
 	cont->height_fraction = child->height_fraction;
-	cont->x = child->x;
-	cont->y = child->y;
-	cont->layout = layout;
+	cont->pending.x = child->pending.x;
+	cont->pending.y = child->pending.y;
+	cont->pending.layout = layout;
 
 	container_replace(child, cont);
 	container_add_child(cont, child);
 
 	if (set_focus) {
 		seat_set_raw_focus(seat, &cont->node);
-		if (cont->fullscreen_mode == FULLSCREEN_GLOBAL) {
+		if (cont->pending.fullscreen_mode == FULLSCREEN_GLOBAL) {
 			seat_set_focus(seat, &child->node);
 		} else {
 			seat_set_raw_focus(seat, &child->node);
@@ -1583,7 +1650,7 @@ static void update_marks_texture(struct sway_container *con,
 	struct wlr_renderer *renderer = wlr_backend_get_renderer(
 			output->wlr_output->backend);
 	*texture = wlr_texture_from_pixels(
-			renderer, WL_SHM_FORMAT_ARGB8888, stride, width, height, data);
+			renderer, DRM_FORMAT_ARGB8888, stride, width, height, data);
 	cairo_surface_destroy(surface);
 	g_object_unref(pango);
 	cairo_destroy(cairo);
@@ -1608,19 +1675,19 @@ void container_update_marks_textures(struct sway_container *con) {
 void container_raise_floating(struct sway_container *con) {
 	// Bring container to front by putting it at the end of the floating list.
 	struct sway_container *floater = container_toplevel_ancestor(con);
-	if (container_is_floating(floater) && floater->workspace) {
-		list_move_to_end(floater->workspace->floating, floater);
-		node_set_dirty(&floater->workspace->node);
+	if (container_is_floating(floater) && floater->pending.workspace) {
+		list_move_to_end(floater->pending.workspace->floating, floater);
+		node_set_dirty(&floater->pending.workspace->node);
 	}
 }
 
 bool container_is_scratchpad_hidden(struct sway_container *con) {
-	return con->scratchpad && !con->workspace;
+	return con->scratchpad && !con->pending.workspace;
 }
 
 bool container_is_scratchpad_hidden_or_child(struct sway_container *con) {
 	con = container_toplevel_ancestor(con);
-	return con->scratchpad && !con->workspace;
+	return con->scratchpad && !con->pending.workspace;
 }
 
 bool container_is_sticky(struct sway_container *con) {
@@ -1648,39 +1715,39 @@ static bool is_parallel(enum sway_container_layout first,
 static bool container_is_squashable(struct sway_container *con,
 		struct sway_container *child) {
 	enum sway_container_layout gp_layout = container_parent_layout(con);
-	return (con->layout == L_HORIZ || con->layout == L_VERT) &&
-		(child->layout == L_HORIZ || child->layout == L_VERT) &&
-		!is_parallel(con->layout, child->layout) &&
-		is_parallel(gp_layout, child->layout);
+	return (con->pending.layout == L_HORIZ || con->pending.layout == L_VERT) &&
+		(child->pending.layout == L_HORIZ || child->pending.layout == L_VERT) &&
+		!is_parallel(con->pending.layout, child->pending.layout) &&
+		is_parallel(gp_layout, child->pending.layout);
 }
 
 static void container_squash_children(struct sway_container *con) {
-	for (int i = 0; i < con->children->length; i++) {
-		struct sway_container *child = con->children->items[i];
+	for (int i = 0; i < con->pending.children->length; i++) {
+		struct sway_container *child = con->pending.children->items[i];
 		i += container_squash(child);
 	}
 }
 
 int container_squash(struct sway_container *con) {
-	if (!con->children) {
+	if (!con->pending.children) {
 		return 0;
 	}
-	if (con->children->length != 1) {
+	if (con->pending.children->length != 1) {
 		container_squash_children(con);
 		return 0;
 	}
-	struct sway_container *child = con->children->items[0];
+	struct sway_container *child = con->pending.children->items[0];
 	int idx = container_sibling_index(con);
 	int change = 0;
 	if (container_is_squashable(con, child)) {
 		// con and child are a redundant H/V pair. Destroy them.
-		while (child->children->length) {
-			struct sway_container *current = child->children->items[0];
+		while (child->pending.children->length) {
+			struct sway_container *current = child->pending.children->items[0];
 			container_detach(current);
-			if (con->parent) {
-				container_insert_child(con->parent, current, idx);
+			if (con->pending.parent) {
+				container_insert_child(con->pending.parent, current, idx);
 			} else {
-				workspace_insert_tiling_direct(con->workspace, current, idx);
+				workspace_insert_tiling_direct(con->pending.workspace, current, idx);
 			}
 			change++;
 		}

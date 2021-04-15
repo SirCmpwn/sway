@@ -115,9 +115,10 @@ static void arrange_layer(struct sway_output *output, struct wl_list *list,
 		// Horizontal axis
 		const uint32_t both_horiz = ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT
 			| ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
-		if ((state->anchor & both_horiz) && box.width == 0) {
+		if (box.width == 0) {
 			box.x = bounds.x;
-			box.width = bounds.width;
+		} else if ((state->anchor & both_horiz) == both_horiz) {
+			box.x = bounds.x + ((bounds.width / 2) - (box.width / 2));
 		} else if ((state->anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT)) {
 			box.x = bounds.x;
 		} else if ((state->anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT)) {
@@ -128,9 +129,10 @@ static void arrange_layer(struct sway_output *output, struct wl_list *list,
 		// Vertical axis
 		const uint32_t both_vert = ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP
 			| ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM;
-		if ((state->anchor & both_vert) && box.height == 0) {
+		if (box.height == 0) {
 			box.y = bounds.y;
-			box.height = bounds.height;
+		} else if ((state->anchor & both_vert) == both_vert) {
+			box.y = bounds.y + ((bounds.height / 2) - (box.height / 2));
 		} else if ((state->anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP)) {
 			box.y = bounds.y;
 		} else if ((state->anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM)) {
@@ -139,17 +141,23 @@ static void arrange_layer(struct sway_output *output, struct wl_list *list,
 			box.y = bounds.y + ((bounds.height / 2) - (box.height / 2));
 		}
 		// Margin
-		if ((state->anchor & both_horiz) == both_horiz) {
+		if (box.width == 0) {
 			box.x += state->margin.left;
-			box.width -= state->margin.left + state->margin.right;
+			box.width = bounds.width -
+				(state->margin.left + state->margin.right);
+		} else if ((state->anchor & both_horiz) == both_horiz) {
+			// don't apply margins
 		} else if ((state->anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT)) {
 			box.x += state->margin.left;
 		} else if ((state->anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT)) {
 			box.x -= state->margin.right;
 		}
-		if ((state->anchor & both_vert) == both_vert) {
+		if (box.height == 0) {
 			box.y += state->margin.top;
-			box.height -= state->margin.top + state->margin.bottom;
+			box.height = bounds.height -
+				(state->margin.top + state->margin.bottom);
+		} else if ((state->anchor & both_vert) == both_vert) {
+			// don't apply margins
 		} else if ((state->anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP)) {
 			box.y += state->margin.top;
 		} else if ((state->anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM)) {
@@ -191,7 +199,7 @@ void arrange_layers(struct sway_output *output) {
 		arrange_output(output);
 	}
 
-	// Arrange non-exlusive surfaces from top->bottom
+	// Arrange non-exclusive surfaces from top->bottom
 	arrange_layer(output, &output->layers[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY],
 			&usable_area, false);
 	arrange_layer(output, &output->layers[ZWLR_LAYER_SHELL_V1_LAYER_TOP],
@@ -429,7 +437,7 @@ static struct sway_layer_subsurface *create_subsurface(
 		struct wlr_subsurface *wlr_subsurface,
 		struct sway_layer_surface *layer_surface) {
 	struct sway_layer_subsurface *subsurface =
-			calloc(1, sizeof(struct sway_layer_surface));
+			calloc(1, sizeof(struct sway_layer_subsurface));
 	if (subsurface == NULL) {
 		return NULL;
 	}

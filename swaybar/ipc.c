@@ -547,9 +547,23 @@ bool handle_ipc_readable(struct swaybar *bar) {
 		return false;
 	}
 
-	json_object *result = json_tokener_parse(resp->payload);
-	if (!result) {
-		sway_log(SWAY_ERROR, "failed to parse payload as json");
+	// The default depth of 32 is too small to represent some nested layouts, but
+	// we can't pass INT_MAX here because json-c (as of this writing) prefaults
+	// all the memory for its stack.
+	json_tokener *tok = json_tokener_new_ex(256);
+	if (!tok) {
+		sway_log_errno(SWAY_ERROR, "failed to create tokener");
+		free_ipc_response(resp);
+		return false;
+	}
+
+	json_object *result = json_tokener_parse_ex(tok, resp->payload, -1);
+	enum json_tokener_error err = json_tokener_get_error(tok);
+	json_tokener_free(tok);
+
+	if (err != json_tokener_success) {
+		sway_log(SWAY_ERROR, "failed to parse payload as json: %s",
+				json_tokener_error_desc(err));
 		free_ipc_response(resp);
 		return false;
 	}

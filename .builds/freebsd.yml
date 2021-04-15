@@ -19,6 +19,7 @@ packages:
 - devel/libudev-devd
 - graphics/libdrm
 - graphics/mesa-libs
+- sysutils/seatd
 - x11/libinput
 - x11/libX11
 - x11/pixman

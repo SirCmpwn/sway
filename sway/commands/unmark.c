@@ -21,7 +21,7 @@ static void remove_all_marks_iterator(struct sway_container *con, void *data) {
 struct cmd_results *cmd_unmark(int argc, char **argv) {
 	// Determine the container
 	struct sway_container *con = NULL;
-	if (config->handler_context.using_criteria) {
+	if (config->handler_context.node_overridden) {
 		con = config->handler_context.container;
 	}
 

@@ -6,6 +6,7 @@ packages:
   - json-c-dev
   - libevdev-dev
   - libinput-dev
+  - libseat-dev
   - libxcb-dev
   - libxkbcommon-dev
   - mesa-dev
@@ -16,7 +17,8 @@ packages:
   - wayland-dev
   - wayland-protocols
   - xcb-util-image-dev
-  - xorg-server-xwayland
+  - xcb-util-wm-dev
+  - xwayland
 sources:
   - https://github.com/swaywm/sway
   - https://github.com/swaywm/wlroots

@@ -55,7 +55,7 @@ static void apply_horiz_layout(list_t *children, struct wlr_box *parent) {
 	// Calculate gap size
 	double inner_gap = 0;
 	struct sway_container *child = children->items[0];
-	struct sway_workspace *ws = child->workspace;
+	struct sway_workspace *ws = child->pending.workspace;
 	if (ws) {
 		inner_gap = ws->gaps_inner;
 	}
@@ -66,7 +66,7 @@ static void apply_horiz_layout(list_t *children, struct wlr_box *parent) {
 		if (layout == L_TABBED || layout == L_STACKED) {
 			inner_gap = 0;
 		}
-		temp = temp->parent;
+		temp = temp->pending.parent;
 	}
 	double total_gap = fmin(inner_gap * (children->length - 1),
 		fmax(0, parent->width - MIN_SANE_W * children->length));
@@ -79,15 +79,15 @@ static void apply_horiz_layout(list_t *children, struct wlr_box *parent) {
 	for (int i = 0; i < children->length; ++i) {
 		struct sway_container *child = children->items[i];
 		child->child_total_width = child_total_width;
-		child->x = child_x;
-		child->y = parent->y;
-		child->width = round(child->width_fraction * child_total_width);
-		child->height = parent->height;
-		child_x += child->width + inner_gap;
+		child->pending.x = child_x;
+		child->pending.y = parent->y;
+		child->pending.width = round(child->width_fraction * child_total_width);
+		child->pending.height = parent->height;
+		child_x += child->pending.width + inner_gap;
 
 		// Make last child use remaining width of parent
 		if (i == children->length - 1) {
-			child->width = parent->x + parent->width - child->x;
+			child->pending.width = parent->x + parent->width - child->pending.x;
 		}
 	}
 }
@@ -134,7 +134,7 @@ static void apply_vert_layout(list_t *children, struct wlr_box *parent) {
 	// Calculate gap size
 	double inner_gap = 0;
 	struct sway_container *child = children->items[0];
-	struct sway_workspace *ws = child->workspace;
+	struct sway_workspace *ws = child->pending.workspace;
 	if (ws) {
 		inner_gap = ws->gaps_inner;
 	}
@@ -145,7 +145,7 @@ static void apply_vert_layout(list_t *children, struct wlr_box *parent) {
 		if (layout == L_TABBED || layout == L_STACKED) {
 			inner_gap = 0;
 		}
-		temp = temp->parent;
+		temp = temp->pending.parent;
 	}
 	double total_gap = fmin(inner_gap * (children->length - 1),
 		fmax(0, parent->height - MIN_SANE_H * children->length));
@@ -158,15 +158,15 @@ static void apply_vert_layout(list_t *children, struct wlr_box *parent) {
 	for (int i = 0; i < children->length; ++i) {
 		struct sway_container *child = children->items[i];
 		child->child_total_height = child_total_height;
-		child->x = parent->x;
-		child->y = child_y;
-		child->width = parent->width;
-		child->height = round(child->height_fraction * child_total_height);
-		child_y += child->height + inner_gap;
+		child->pending.x = parent->x;
+		child->pending.y = child_y;
+		child->pending.width = parent->width;
+		child->pending.height = round(child->height_fraction * child_total_height);
+		child_y += child->pending.height + inner_gap;
 
 		// Make last child use remaining height of parent
 		if (i == children->length - 1) {
-			child->height = parent->y + parent->height - child->y;
+			child->pending.height = parent->y + parent->height - child->pending.y;
 		}
 	}
 }
@@ -178,10 +178,10 @@ static void apply_tabbed_layout(list_t *children, struct wlr_box *parent) {
 	for (int i = 0; i < children->length; ++i) {
 		struct sway_container *child = children->items[i];
 		int parent_offset = child->view ? 0 : container_titlebar_height();
-		child->x = parent->x;
-		child->y = parent->y + parent_offset;
-		child->width = parent->width;
-		child->height = parent->height - parent_offset;
+		child->pending.x = parent->x;
+		child->pending.y = parent->y + parent_offset;
+		child->pending.width = parent->width;
+		child->pending.height = parent->height - parent_offset;
 	}
 }
 
@@ -193,10 +193,10 @@ static void apply_stacked_layout(list_t *children, struct wlr_box *parent) {
 		struct sway_container *child = children->items[i];
 		int parent_offset = child->view ?  0 :
 			container_titlebar_height() * children->length;
-		child->x = parent->x;
-		child->y = parent->y + parent_offset;
-		child->width = parent->width;
-		child->height = parent->height - parent_offset;
+		child->pending.x = parent->x;
+		child->pending.y = parent->y + parent_offset;
+		child->pending.width = parent->width;
+		child->pending.height = parent->height - parent_offset;
 	}
 }
 
@@ -246,7 +246,7 @@ void arrange_container(struct sway_container *container) {
 	}
 	struct wlr_box box;
 	container_get_box(container, &box);
-	arrange_children(container->children, container->layout, &box);
+	arrange_children(container->pending.children, container->pending.layout, &box);
 	node_set_dirty(&container->node);
 }
 
@@ -278,8 +278,8 @@ void arrange_workspace(struct sway_workspace *workspace) {
 		for (int i = 0; i < workspace->floating->length; ++i) {
 			struct sway_container *floater = workspace->floating->items[i];
 			container_floating_translate(floater, diff_x, diff_y);
-			double center_x = floater->x + floater->width / 2;
-			double center_y = floater->y + floater->height / 2;
+			double center_x = floater->pending.x + floater->pending.width / 2;
+			double center_y = floater->pending.y + floater->pending.height / 2;
 			struct wlr_box workspace_box;
 			workspace_get_box(workspace, &workspace_box);
 			if (!wlr_box_contains_point(&workspace_box, center_x, center_y)) {
@@ -294,10 +294,10 @@ void arrange_workspace(struct sway_workspace *workspace) {
 			workspace->x, workspace->y);
 	if (workspace->fullscreen) {
 		struct sway_container *fs = workspace->fullscreen;
-		fs->x = output->lx;
-		fs->y = output->ly;
-		fs->width = output->width;
-		fs->height = output->height;
+		fs->pending.x = output->lx;
+		fs->pending.y = output->ly;
+		fs->pending.width = output->width;
+		fs->pending.height = output->height;
 		arrange_container(fs);
 	} else {
 		struct wlr_box box;
@@ -337,10 +337,10 @@ void arrange_root(void) {
 
 	if (root->fullscreen_global) {
 		struct sway_container *fs = root->fullscreen_global;
-		fs->x = root->x;
-		fs->y = root->y;
-		fs->width = root->width;
-		fs->height = root->height;
+		fs->pending.x = root->x;
+		fs->pending.y = root->y;
+		fs->pending.width = root->width;
+		fs->pending.height = root->height;
 		arrange_container(fs);
 	} else {
 		for (int i = 0; i < root->outputs->length; ++i) {

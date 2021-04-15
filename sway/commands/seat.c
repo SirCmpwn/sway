@@ -8,13 +8,13 @@
 
 // must be in order for the bsearch
 // these handlers perform actions on the seat
-static struct cmd_handler seat_action_handlers[] = {
+static const struct cmd_handler seat_action_handlers[] = {
 	{ "cursor", seat_cmd_cursor },
 };
 
 // must be in order for the bsearch
 // these handlers alter the seat config
-static struct cmd_handler seat_handlers[] = {
+static const struct cmd_handler seat_handlers[] = {
 	{ "attach", seat_cmd_attach },
 	{ "fallback", seat_cmd_fallback },
 	{ "hide_cursor", seat_cmd_hide_cursor },

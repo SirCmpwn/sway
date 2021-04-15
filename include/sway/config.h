@@ -559,7 +559,7 @@ struct sway_config {
 		struct sway_node *node;
 		struct sway_container *container;
 		struct sway_workspace *workspace;
-		bool using_criteria;
+		bool node_overridden; // True if the node is selected by means other than focus
 		struct {
 			int argc;
 			char **argv;

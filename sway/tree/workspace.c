@@ -48,7 +48,7 @@ struct sway_output *workspace_get_initial_output(const char *name) {
 	if (focus && focus->type == N_WORKSPACE) {
 		return focus->sway_workspace->output;
 	} else if (focus && focus->type == N_CONTAINER) {
-		return focus->sway_container->workspace->output;
+		return focus->sway_container->pending.workspace->output;
 	}
 	// Fallback to the first output or noop output for headless
 	return root->outputs->length ? root->outputs->items[0] : root->noop_output;
@@ -569,7 +569,7 @@ bool workspace_switch(struct sway_workspace *workspace,
 	if (focus && focus->type == N_WORKSPACE) {
 		active_ws = focus->sway_workspace;
 	} else if (focus && focus->type == N_CONTAINER) {
-		active_ws = focus->sway_container->workspace;
+		active_ws = focus->sway_container->pending.workspace;
 	}
 
 	if (!no_auto_back_and_forth && config->auto_back_and_forth && active_ws
@@ -736,13 +736,13 @@ struct sway_container *workspace_find_container(struct sway_workspace *ws,
 }
 
 static void set_workspace(struct sway_container *container, void *data) {
-	container->workspace = container->parent->workspace;
+	container->pending.workspace = container->pending.parent->pending.workspace;
 }
 
 static void workspace_attach_tiling(struct sway_workspace *ws,
 		struct sway_container *con) {
 	list_add(ws->tiling, con);
-	con->workspace = ws;
+	con->pending.workspace = ws;
 	container_for_each_child(con, set_workspace, NULL);
 	container_handle_fullscreen_reparent(con);
 	workspace_update_representation(ws);
@@ -753,7 +753,7 @@ static void workspace_attach_tiling(struct sway_workspace *ws,
 struct sway_container *workspace_wrap_children(struct sway_workspace *ws) {
 	struct sway_container *fs = ws->fullscreen;
 	struct sway_container *middle = container_create(NULL);
-	middle->layout = ws->layout;
+	middle->pending.layout = ws->layout;
 	while (ws->tiling->length) {
 		struct sway_container *child = ws->tiling->items[0];
 		container_detach(child);
@@ -771,9 +771,9 @@ void workspace_unwrap_children(struct sway_workspace *ws,
 		return;
 	}
 
-	ws->layout = wrap->layout;
-	while (wrap->children->length) {
-		struct sway_container *child = wrap->children->items[0];
+	ws->layout = wrap->pending.layout;
+	while (wrap->pending.children->length) {
+		struct sway_container *child = wrap->pending.children->items[0];
 		container_detach(child);
 		workspace_add_tiling(ws, child);
 	}
@@ -793,14 +793,14 @@ void workspace_detach(struct sway_workspace *workspace) {
 
 struct sway_container *workspace_add_tiling(struct sway_workspace *workspace,
 		struct sway_container *con) {
-	if (con->workspace) {
+	if (con->pending.workspace) {
 		container_detach(con);
 	}
 	if (config->default_layout != L_NONE) {
 		con = container_split(con, config->default_layout);
 	}
 	list_add(workspace->tiling, con);
-	con->workspace = workspace;
+	con->pending.workspace = workspace;
 	container_for_each_child(con, set_workspace, NULL);
 	container_handle_fullscreen_reparent(con);
 	workspace_update_representation(workspace);
@@ -811,11 +811,11 @@ struct sway_container *workspace_add_tiling(struct sway_workspace *workspace,
 
 void workspace_add_floating(struct sway_workspace *workspace,
 		struct sway_container *con) {
-	if (con->workspace) {
+	if (con->pending.workspace) {
 		container_detach(con);
 	}
 	list_add(workspace->floating, con);
-	con->workspace = workspace;
+	con->pending.workspace = workspace;
 	container_for_each_child(con, set_workspace, NULL);
 	container_handle_fullscreen_reparent(con);
 	node_set_dirty(&workspace->node);
@@ -825,7 +825,7 @@ void workspace_add_floating(struct sway_workspace *workspace,
 void workspace_insert_tiling_direct(struct sway_workspace *workspace,
 		struct sway_container *con, int index) {
 	list_insert(workspace->tiling, index, con);
-	con->workspace = workspace;
+	con->pending.workspace = workspace;
 	container_for_each_child(con, set_workspace, NULL);
 	container_handle_fullscreen_reparent(con);
 	workspace_update_representation(workspace);
@@ -835,7 +835,7 @@ void workspace_insert_tiling_direct(struct sway_workspace *workspace,
 
 struct sway_container *workspace_insert_tiling(struct sway_workspace *workspace,
 		struct sway_container *con, int index) {
-	if (con->workspace) {
+	if (con->pending.workspace) {
 		container_detach(con);
 	}
 	if (config->default_layout != L_NONE) {
@@ -905,7 +905,7 @@ struct sway_container *workspace_split(struct sway_workspace *workspace,
 	enum sway_container_layout old_layout = workspace->layout;
 	struct sway_container *middle = workspace_wrap_children(workspace);
 	workspace->layout = layout;
-	middle->layout = old_layout;
+	middle->pending.layout = old_layout;
 
 	struct sway_seat *seat;
 	wl_list_for_each(seat, &server.input->seats, link) {

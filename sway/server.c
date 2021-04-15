@@ -9,6 +9,7 @@
 #include <wlr/backend/multi.h>
 #include <wlr/backend/noop.h>
 #include <wlr/backend/session.h>
+#include <wlr/config.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_data_control_v1.h>
@@ -25,6 +26,9 @@
 #include <wlr/types/wlr_viewporter.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
+#include <wlr/types/wlr_xdg_foreign_registry.h>
+#include <wlr/types/wlr_xdg_foreign_v1.h>
+#include <wlr/types/wlr_xdg_foreign_v2.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include "config.h"
 #include "list.h"
@@ -150,6 +154,11 @@ bool server_init(struct sway_server *server) {
 	wlr_primary_selection_v1_device_manager_create(server->wl_display);
 	wlr_viewporter_create(server->wl_display);
 
+	struct wlr_xdg_foreign_registry *foreign_registry =
+		wlr_xdg_foreign_registry_create(server->wl_display);
+	wlr_xdg_foreign_v1_create(server->wl_display, foreign_registry);
+	wlr_xdg_foreign_v2_create(server->wl_display, foreign_registry);
+
 	// Avoid using "wayland-0" as display socket
 	char name_candidate[16];
 	for (int i = 1; i <= 32; ++i) {
@@ -186,7 +195,6 @@ bool server_init(struct sway_server *server) {
 	}
 
 	server->dirty_nodes = create_list();
-	server->transactions = create_list();
 
 	server->input = input_manager_create(server);
 	input_manager_get_default_seat(); // create seat0
@@ -202,7 +210,6 @@ void server_fini(struct sway_server *server) {
 	wl_display_destroy_clients(server->wl_display);
 	wl_display_destroy(server->wl_display);
 	list_free(server->dirty_nodes);
-	list_free(server->transactions);
 }
 
 bool server_start(struct sway_server *server) {

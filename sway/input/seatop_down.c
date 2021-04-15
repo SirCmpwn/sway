@@ -5,6 +5,7 @@
 #include "sway/input/cursor.h"
 #include "sway/input/seat.h"
 #include "sway/tree/view.h"
+#include "sway/desktop/transaction.h"
 #include "log.h"
 
 struct seatop_down_event {
@@ -107,4 +108,5 @@ void seatop_begin_down(struct sway_seat *seat, struct sway_container *con,
 	seat->seatop_data = e;
 
 	container_raise_floating(con);
+	transaction_commit_dirty();
 }

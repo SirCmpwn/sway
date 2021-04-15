@@ -70,13 +70,13 @@ static void restore_workspaces(struct sway_output *output) {
 		// floater re-centered
 		for (int i = 0; i < ws->floating->length; i++) {
 			struct sway_container *floater = ws->floating->items[i];
-			if (floater->width == 0 || floater->height == 0 ||
-					floater->width > output->width ||
-					floater->height > output->height ||
-					floater->x > output->lx + output->width ||
-					floater->y > output->ly + output->height ||
-					floater->x + floater->width < output->lx ||
-					floater->y + floater->height < output->ly) {
+			if (floater->pending.width == 0 || floater->pending.height == 0 ||
+					floater->pending.width > output->width ||
+					floater->pending.height > output->height ||
+					floater->pending.x > output->lx + output->width ||
+					floater->pending.y > output->ly + output->height ||
+					floater->pending.x + floater->pending.width < output->lx ||
+					floater->pending.y + floater->pending.height < output->ly) {
 				container_floating_resize_and_center(floater);
 			}
 		}

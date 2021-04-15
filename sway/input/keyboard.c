@@ -9,7 +9,6 @@
 #include <wlr/types/wlr_keyboard_group.h>
 #include <xkbcommon/xkbcommon-names.h>
 #include "sway/commands.h"
-#include "sway/desktop/transaction.h"
 #include "sway/input/input-manager.h"
 #include "sway/input/keyboard.h"
 #include "sway/input/seat.h"
@@ -379,6 +378,28 @@ static void update_keyboard_state(struct sway_keyboard *keyboard,
 	}
 }
 
+/**
+ * Get keyboard grab of the seat from sway_keyboard if we should forward events
+ * to it.
+ *
+ * Returns NULL if the keyboard is not grabbed by an input method,
+ * or if event is from virtual keyboard of the same client as grab.
+ * TODO: see swaywm/wlroots#2322
+ */
+static struct wlr_input_method_keyboard_grab_v2 *keyboard_get_im_grab(
+		struct sway_keyboard *keyboard) {
+	struct wlr_input_method_v2 *input_method = keyboard->seat_device->
+		sway_seat->im_relay.input_method;
+	struct wlr_virtual_keyboard_v1 *virtual_keyboard =
+		wlr_input_device_get_virtual_keyboard(keyboard->seat_device->input_device->wlr_device);
+	if (!input_method || !input_method->keyboard_grab || (virtual_keyboard &&
+				wl_resource_get_client(virtual_keyboard->resource) ==
+				wl_resource_get_client(input_method->keyboard_grab->resource))) {
+		return NULL;
+	}
+	return input_method->keyboard_grab;
+}
+
 static void handle_key_event(struct sway_keyboard *keyboard,
 		struct wlr_event_keyboard_key *event) {
 	struct sway_seat *seat = keyboard->seat_device->sway_seat;
@@ -489,18 +510,42 @@ static void handle_key_event(struct sway_keyboard *keyboard,
 				keyinfo.raw_keysyms_len);
 	}
 
-	if (!handled || event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
+	if (event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
+		// If the pressed event was sent to a client, also send the released
+		// event. In particular, don't send the released event to the IM grab.
 		bool pressed_sent = update_shortcut_state(
-				&keyboard->state_pressed_sent, event->keycode, event->state,
-				keyinfo.keycode, 0);
-		if (pressed_sent || event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+			&keyboard->state_pressed_sent, event->keycode,
+			event->state, keyinfo.keycode, 0);
+		if (pressed_sent) {
 			wlr_seat_set_keyboard(wlr_seat, wlr_device);
 			wlr_seat_keyboard_notify_key(wlr_seat, event->time_msec,
-					event->keycode, event->state);
+				event->keycode, event->state);
+			handled = true;
 		}
 	}
 
-	transaction_commit_dirty();
+	if (!handled) {
+		struct wlr_input_method_keyboard_grab_v2 *kb_grab = keyboard_get_im_grab(keyboard);
+
+		if (kb_grab) {
+			wlr_input_method_keyboard_grab_v2_set_keyboard(kb_grab,
+				wlr_device->keyboard);
+			wlr_input_method_keyboard_grab_v2_send_key(kb_grab,
+				event->time_msec, event->keycode, event->state);
+			handled = true;
+		}
+	}
+
+	if (!handled && event->state != WL_KEYBOARD_KEY_STATE_RELEASED) {
+		// If a released event failed pressed sent test, and not in sent to
+		// keyboard grab, it is still not handled. Don't handle released here.
+		update_shortcut_state(
+			&keyboard->state_pressed_sent, event->keycode, event->state,
+			keyinfo.keycode, 0);
+		wlr_seat_set_keyboard(wlr_seat, wlr_device);
+		wlr_seat_keyboard_notify_key(wlr_seat, event->time_msec,
+				event->keycode, event->state);
+	}
 
 	free(device_identifier);
 }
@@ -587,7 +632,6 @@ static int handle_keyboard_repeat(void *data) {
 
 		seat_execute_command(keyboard->seat_device->sway_seat,
 				keyboard->repeat_binding);
-		transaction_commit_dirty();
 	}
 	return 0;
 }
@@ -617,10 +661,19 @@ static void handle_modifier_event(struct sway_keyboard *keyboard) {
 	struct wlr_input_device *wlr_device =
 		keyboard->seat_device->input_device->wlr_device;
 	if (!wlr_device->keyboard->group) {
-		struct wlr_seat *wlr_seat = keyboard->seat_device->sway_seat->wlr_seat;
-		wlr_seat_set_keyboard(wlr_seat, wlr_device);
-		wlr_seat_keyboard_notify_modifiers(wlr_seat,
-				&wlr_device->keyboard->modifiers);
+		struct wlr_input_method_keyboard_grab_v2 *kb_grab = keyboard_get_im_grab(keyboard);
+
+		if (kb_grab) {
+			wlr_input_method_keyboard_grab_v2_set_keyboard(kb_grab,
+					wlr_device->keyboard);
+			wlr_input_method_keyboard_grab_v2_send_modifiers(kb_grab,
+					&wlr_device->keyboard->modifiers);
+		} else {
+			struct wlr_seat *wlr_seat = keyboard->seat_device->sway_seat->wlr_seat;
+			wlr_seat_set_keyboard(wlr_seat, wlr_device);
+			wlr_seat_keyboard_notify_modifiers(wlr_seat,
+					&wlr_device->keyboard->modifiers);
+		}
 
 		uint32_t modifiers = wlr_keyboard_get_modifiers(wlr_device->keyboard);
 		determine_bar_visibility(modifiers);

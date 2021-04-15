@@ -59,11 +59,11 @@ void root_scratchpad_add_container(struct sway_container *con, struct sway_works
 		return;
 	}
 
-	struct sway_container *parent = con->parent;
-	struct sway_workspace *workspace = con->workspace;
+	struct sway_container *parent = con->pending.parent;
+	struct sway_workspace *workspace = con->pending.workspace;
 
 	// Clear the fullscreen mode when sending to the scratchpad
-	if (con->fullscreen_mode != FULLSCREEN_NONE) {
+	if (con->pending.fullscreen_mode != FULLSCREEN_NONE) {
 		container_fullscreen_disable(con);
 	}
 
@@ -117,7 +117,7 @@ void root_scratchpad_show(struct sway_container *con) {
 		sway_log(SWAY_DEBUG, "No focused workspace to show scratchpad on");
 		return;
 	}
-	struct sway_workspace *old_ws = con->workspace;
+	struct sway_workspace *old_ws = con->pending.workspace;
 
 	// If the current con or any of its parents are in fullscreen mode, we
 	// first need to disable it before showing the scratchpad con.
@@ -134,15 +134,15 @@ void root_scratchpad_show(struct sway_container *con) {
 		workspace_consider_destroy(old_ws);
 	} else {
 		// Act on the ancestor of scratchpad hidden split containers
-		while (con->parent) {
-			con = con->parent;
+		while (con->pending.parent) {
+			con = con->pending.parent;
 		}
 	}
 	workspace_add_floating(new_ws, con);
 
 	// Make sure the container's center point overlaps this workspace
-	double center_lx = con->x + con->width / 2;
-	double center_ly = con->y + con->height / 2;
+	double center_lx = con->pending.x + con->pending.width / 2;
+	double center_ly = con->pending.y + con->pending.height / 2;
 
 	struct wlr_box workspace_box;
 	workspace_get_box(new_ws, &workspace_box);
@@ -155,7 +155,7 @@ void root_scratchpad_show(struct sway_container *con) {
 }
 
 static void disable_fullscreen(struct sway_container *con, void *data) {
-	if (con->fullscreen_mode != FULLSCREEN_NONE) {
+	if (con->pending.fullscreen_mode != FULLSCREEN_NONE) {
 		container_fullscreen_disable(con);
 	}
 }
@@ -163,9 +163,9 @@ static void disable_fullscreen(struct sway_container *con, void *data) {
 void root_scratchpad_hide(struct sway_container *con) {
 	struct sway_seat *seat = input_manager_current_seat();
 	struct sway_node *focus = seat_get_focus_inactive(seat, &root->node);
-	struct sway_workspace *ws = con->workspace;
+	struct sway_workspace *ws = con->pending.workspace;
 
-	if (con->fullscreen_mode == FULLSCREEN_GLOBAL && !con->workspace) {
+	if (con->pending.fullscreen_mode == FULLSCREEN_GLOBAL && !con->pending.workspace) {
 		// If the container was made fullscreen global while in the scratchpad,
 		// it should be shown until fullscreen has been disabled
 		return;
@@ -270,7 +270,16 @@ found:
 			sway_log(SWAY_DEBUG,
 					"Creating workspace %s for pid %d because it disappeared",
 					pw->workspace, pid);
-			ws = workspace_create(pw->output, pw->workspace);
+
+			struct sway_output *output = pw->output;
+			if (pw->output && !pw->output->enabled) {
+				sway_log(SWAY_DEBUG,
+						"Workspace output %s is disabled, trying another one",
+						pw->output->wlr_output->name);
+				output = NULL;
+			}
+
+			ws = workspace_create(output, pw->workspace);
 		}
 
 		pid_workspace_destroy(pw);

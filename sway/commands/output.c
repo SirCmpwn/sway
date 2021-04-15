@@ -6,7 +6,7 @@
 #include "log.h"
 
 // must be in order for the bsearch
-static struct cmd_handler output_handlers[] = {
+static const struct cmd_handler output_handlers[] = {
 	{ "adaptive_sync", output_cmd_adaptive_sync },
 	{ "background", output_cmd_background },
 	{ "bg", output_cmd_background },

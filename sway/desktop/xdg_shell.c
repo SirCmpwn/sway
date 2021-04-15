@@ -70,13 +70,13 @@ static void popup_unconstrain(struct sway_xdg_popup *popup) {
 	struct sway_view *view = popup->child.view;
 	struct wlr_xdg_popup *wlr_popup = popup->wlr_xdg_surface->popup;
 
-	struct sway_output *output = view->container->workspace->output;
+	struct sway_output *output = view->container->pending.workspace->output;
 
 	// the output box expressed in the coordinate system of the toplevel parent
 	// of the popup
 	struct wlr_box output_toplevel_sx_box = {
-		.x = output->lx - view->container->content_x,
-		.y = output->ly - view->container->content_y,
+		.x = output->lx - view->container->pending.content_x,
+		.y = output->ly - view->container->pending.content_y,
 		.width = output->width,
 		.height = output->height,
 	};
@@ -293,19 +293,23 @@ static void handle_commit(struct wl_listener *listener, void *data) {
 			new_geo.y != view->geometry.y;
 
 	if (new_size) {
-		// The view has unexpectedly sent a new size
+		// The client changed its surface size in this commit. For floating
+		// containers, we resize the container to match. For tiling containers,
+		// we only recenter the surface.
 		desktop_damage_view(view);
-		view_update_size(view, new_geo.width, new_geo.height);
 		memcpy(&view->geometry, &new_geo, sizeof(struct wlr_box));
+		if (container_is_floating(view->container)) {
+			view_update_size(view);
+			transaction_commit_dirty_client();
+		} else {
+			view_center_surface(view);
+		}
 		desktop_damage_view(view);
-		transaction_commit_dirty();
 	}
 
 	if (view->container->node.instruction) {
 		transaction_notify_view_ready_by_serial(view,
 				xdg_surface->configure_serial);
-	} else if (new_size) {
-		transaction_notify_view_ready_immediately(view);
 	}
 
 	view_damage_from(view);

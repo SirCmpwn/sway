@@ -22,24 +22,17 @@ DEFAULT_ICON = "󰀏"
 
 
 def icon_for_window(window):
-    app_id = window.app_id
-    if app_id is not None and len(app_id) > 0:
-        app_id = app_id.lower()
-        if app_id in WINDOW_ICONS:
-            return WINDOW_ICONS[app_id]
-        logging.info("No icon available for window with app_id: %s" % str(app_id))
-    else:
-        # xwayland support
-        class_name = window.window_class
-        if len(class_name) > 0:
-            class_name = class_name.lower()
-            if class_name in WINDOW_ICONS:
-                return WINDOW_ICONS[class_name]
-            logging.info(
-                "No icon available for window with class_name: %s" % str(class_name)
-            )
-    return DEFAULT_ICON
+    name = None
+    if window.app_id is not None and len(window.app_id) > 0:
+        name = window.app_id.lower()
+    elif window.window_class is not None and len(window.window_class) > 0:
+        name =  window.window_class.lower()
 
+    if name in WINDOW_ICONS:
+        return WINDOW_ICONS[name]
+
+    logging.info("No icon available for window with name: %s" % str(name))
+    return DEFAULT_ICON
 
 def rename_workspaces(ipc):
     for workspace in ipc.get_tree().workspaces():
@@ -128,3 +121,4 @@ if __name__ == "__main__":
     rename_workspaces(ipc)
 
     ipc.main()
+

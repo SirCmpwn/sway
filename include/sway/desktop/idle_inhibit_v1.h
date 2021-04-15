@@ -22,6 +22,7 @@ struct sway_idle_inhibit_manager_v1 {
 
 struct sway_idle_inhibitor_v1 {
 	struct sway_idle_inhibit_manager_v1 *manager;
+	struct wlr_idle_inhibitor_v1 *wlr_inhibitor;
 	struct sway_view *view;
 	enum sway_idle_inhibit_mode mode;
 

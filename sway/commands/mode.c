@@ -9,7 +9,7 @@
 #include "stringop.h"
 
 // Must be in order for the bsearch
-static struct cmd_handler mode_handlers[] = {
+static const struct cmd_handler mode_handlers[] = {
 	{ "bindcode", cmd_bindcode },
 	{ "bindswitch", cmd_bindswitch },
 	{ "bindsym", cmd_bindsym },

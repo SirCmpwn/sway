@@ -23,6 +23,8 @@
 #include "sway/xwayland.h"
 #endif
 
+struct sway_transaction;
+
 struct sway_server {
 	struct wl_display *wl_display;
 	struct wl_event_loop *wl_event_loop;
@@ -85,8 +87,22 @@ struct sway_server {
 	struct wlr_text_input_manager_v3 *text_input;
 	struct wlr_foreign_toplevel_manager_v1 *foreign_toplevel_manager;
 
+	// The timeout for transactions, after which a transaction is applied
+	// regardless of readiness.
 	size_t txn_timeout_ms;
-	list_t *transactions;
+
+	// Stores a transaction after it has been committed, but is waiting for
+	// views to ack the new dimensions before being applied. A queued
+	// transaction is frozen and must not have new instructions added to it.
+	struct sway_transaction *queued_transaction;
+
+	// Stores a pending transaction that will be committed once the existing
+	// queued transaction is applied and freed. The pending transaction can be
+	// updated with new instructions as needed.
+	struct sway_transaction *pending_transaction;
+
+	// Stores the nodes that have been marked as "dirty" and will be put into
+	// the pending transaction.
 	list_t *dirty_nodes;
 };
 

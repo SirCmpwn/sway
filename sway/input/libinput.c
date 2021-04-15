@@ -1,5 +1,6 @@
 #include <float.h>
 #include <libinput.h>
+#include <libudev.h>
 #include <limits.h>
 #include <wlr/backend/libinput.h>
 #include "log.h"
@@ -311,4 +312,26 @@ void sway_input_reset_libinput_device(struct sway_input_device *input_device) {
 	if (changed) {
 		ipc_event_input("libinput_config", input_device);
 	}
+}
+
+bool sway_libinput_device_is_builtin(struct sway_input_device *sway_device) {
+	if (!wlr_input_device_is_libinput(sway_device->wlr_device)) {
+		return false;
+	}
+
+	struct libinput_device *device =
+		wlr_libinput_get_device_handle(sway_device->wlr_device);
+	struct udev_device *udev_device =
+		libinput_device_get_udev_device(device);
+	if (!udev_device) {
+		return false;
+	}
+
+	const char *id_path = udev_device_get_property_value(udev_device, "ID_PATH");
+	if (!id_path) {
+		return false;
+	}
+
+	const char prefix[] = "platform-";
+	return strncmp(id_path, prefix, strlen(prefix)) == 0;
 }

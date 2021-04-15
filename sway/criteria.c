@@ -351,7 +351,7 @@ static bool criteria_matches_view(struct criteria *criteria,
 	}
 
 	if (criteria->workspace) {
-		struct sway_workspace *ws = view->container->workspace;
+		struct sway_workspace *ws = view->container->pending.workspace;
 		if (!ws) {
 			return false;
 		}
@@ -359,7 +359,7 @@ static bool criteria_matches_view(struct criteria *criteria,
 		switch (criteria->workspace->match_type) {
 		case PATTERN_FOCUSED:
 			if (focused &&
-					strcmp(ws->name, focused->container->workspace->name)) {
+					strcmp(ws->name, focused->container->pending.workspace->name)) {
 				return false;
 			}
 			break;

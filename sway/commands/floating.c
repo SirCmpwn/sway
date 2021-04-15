@@ -40,8 +40,8 @@ struct cmd_results *cmd_floating(int argc, char **argv) {
 	// If the container is in a floating split container,
 	// operate on the split container instead of the child.
 	if (container_is_floating_or_child(container)) {
-		while (container->parent) {
-			container = container->parent;
+		while (container->pending.parent) {
+			container = container->pending.parent;
 		}
 	}
 
@@ -51,8 +51,8 @@ struct cmd_results *cmd_floating(int argc, char **argv) {
 	container_set_floating(container, wants_floating);
 
 	// Floating containers in the scratchpad should be ignored
-	if (container->workspace) {
-		arrange_workspace(container->workspace);
+	if (container->pending.workspace) {
+		arrange_workspace(container->pending.workspace);
 	}
 
 	return cmd_results_new(CMD_SUCCESS, NULL);

@@ -20,6 +20,7 @@
 #include "sway/input/cursor.h"
 #include "sway/input/input-manager.h"
 #include "sway/input/keyboard.h"
+#include "sway/input/libinput.h"
 #include "sway/input/seat.h"
 #include "sway/input/switch.h"
 #include "sway/input/tablet.h"
@@ -309,8 +310,8 @@ static void handle_seat_node_destroy(struct wl_listener *listener, void *data) {
 		// Setting focus_inactive
 		focus = seat_get_focus_inactive(seat, &root->node);
 		seat_set_raw_focus(seat, next_focus);
-		if (focus->type == N_CONTAINER && focus->sway_container->workspace) {
-			seat_set_raw_focus(seat, &focus->sway_container->workspace->node);
+		if (focus->type == N_CONTAINER && focus->sway_container->pending.workspace) {
+			seat_set_raw_focus(seat, &focus->sway_container->pending.workspace->node);
 		}
 		seat_set_raw_focus(seat, focus);
 	}
@@ -666,6 +667,40 @@ static void seat_reset_input_config(struct sway_seat *seat,
 		sway_device->input_device->wlr_device, NULL);
 }
 
+static bool has_prefix(const char *str, const char *prefix) {
+	return strncmp(str, prefix, strlen(prefix)) == 0;
+}
+
+/**
+ * Get the name of the built-in output, if any. Returns NULL if there isn't
+ * exactly one built-in output.
+ */
+static const char *get_builtin_output_name(void) {
+	const char *match = NULL;
+	for (int i = 0; i < root->outputs->length; ++i) {
+		struct sway_output *output = root->outputs->items[i];
+		const char *name = output->wlr_output->name;
+		if (has_prefix(name, "eDP-") || has_prefix(name, "LVDS-") ||
+				has_prefix(name, "DSI-")) {
+			if (match != NULL) {
+				return NULL;
+			}
+			match = name;
+		}
+	}
+	return match;
+}
+
+static bool is_touch_or_tablet_tool(struct sway_seat_device *seat_device) {
+	switch (seat_device->input_device->wlr_device->type) {
+	case WLR_INPUT_DEVICE_TOUCH:
+	case WLR_INPUT_DEVICE_TABLET_TOOL:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static void seat_apply_input_config(struct sway_seat *seat,
 		struct sway_seat_device *sway_device) {
 	struct input_config *ic =
@@ -681,7 +716,21 @@ static void seat_apply_input_config(struct sway_seat *seat,
 
 	switch (mapped_to) {
 	case MAPPED_TO_DEFAULT:
+		/*
+		 * If the wlroots backend provides an output name, use that.
+		 *
+		 * Otherwise, try to map built-in touch and tablet tool devices to the
+		 * built-in output.
+		 */
 		mapped_to_output = sway_device->input_device->wlr_device->output_name;
+		if (mapped_to_output == NULL && is_touch_or_tablet_tool(sway_device) &&
+				sway_libinput_device_is_builtin(sway_device->input_device)) {
+			mapped_to_output = get_builtin_output_name();
+			if (mapped_to_output) {
+				sway_log(SWAY_DEBUG, "Auto-detected output '%s' for device '%s'",
+					mapped_to_output, sway_device->input_device->identifier);
+			}
+		}
 		if (mapped_to_output == NULL) {
 			return;
 		}
@@ -1086,29 +1135,18 @@ void seat_set_focus(struct sway_seat *seat, struct sway_node *node) {
 	}
 
 	struct sway_workspace *new_workspace = node->type == N_WORKSPACE ?
-		node->sway_workspace : node->sway_container->workspace;
+		node->sway_workspace : node->sway_container->pending.workspace;
 	struct sway_container *container = node->type == N_CONTAINER ?
 		node->sway_container : NULL;
 
-	// Deny setting focus to a view which is hidden by a fullscreen container
-	if (new_workspace && new_workspace->fullscreen && container &&
-			!container_is_fullscreen_or_child(container)) {
-		// Unless it's a transient container
-		if (!container_is_transient_for(container, new_workspace->fullscreen)) {
-			return;
-		}
+	// Deny setting focus to a view which is hidden by a fullscreen container or global
+	if (container && container_obstructing_fullscreen_container(container)) {
+		return;
 	}
+
 	// Deny setting focus to a workspace node when using fullscreen global
 	if (root->fullscreen_global && !container && new_workspace) {
 		return;
-	}
-	// Deny setting focus to a view which is hidden by a fullscreen global
-	if (root->fullscreen_global && container != root->fullscreen_global &&
-				!container_has_ancestor(container, root->fullscreen_global)) {
-		// Unless it's a transient container
-		if (!container_is_transient_for(container, root->fullscreen_global)) {
-			return;
-		}
 	}
 
 	struct sway_output *new_output =
@@ -1135,10 +1173,10 @@ void seat_set_focus(struct sway_seat *seat, struct sway_node *node) {
 	// Put the container parents on the focus stack, then the workspace, then
 	// the focused container.
 	if (container) {
-		struct sway_container *parent = container->parent;
+		struct sway_container *parent = container->pending.parent;
 		while (parent) {
 			seat_set_raw_focus(seat, &parent->node);
-			parent = parent->parent;
+			parent = parent->pending.parent;
 		}
 	}
 	if (new_workspace) {
@@ -1234,6 +1272,7 @@ void seat_set_focus_surface(struct sway_seat *seat,
 		wlr_seat_keyboard_notify_clear_focus(seat->wlr_seat);
 	}
 
+	sway_input_method_relay_set_focus(&seat->im_relay, surface);
 	seat_tablet_pads_notify_enter(seat, surface);
 }
 
@@ -1326,7 +1365,7 @@ struct sway_container *seat_get_focus_inactive_tiling(struct sway_seat *seat,
 		struct sway_node *node = current->node;
 		if (node->type == N_CONTAINER &&
 				!container_is_floating_or_child(node->sway_container) &&
-				node->sway_container->workspace == workspace) {
+				node->sway_container->pending.workspace == workspace) {
 			return node->sway_container;
 		}
 	}
@@ -1343,7 +1382,7 @@ struct sway_container *seat_get_focus_inactive_floating(struct sway_seat *seat,
 		struct sway_node *node = current->node;
 		if (node->type == N_CONTAINER &&
 				container_is_floating_or_child(node->sway_container) &&
-				node->sway_container->workspace == workspace) {
+				node->sway_container->pending.workspace == workspace) {
 			return node->sway_container;
 		}
 	}
@@ -1391,7 +1430,7 @@ struct sway_workspace *seat_get_focused_workspace(struct sway_seat *seat) {
 		return NULL;
 	}
 	if (focus->type == N_CONTAINER) {
-		return focus->sway_container->workspace;
+		return focus->sway_container->pending.workspace;
 	}
 	if (focus->type == N_WORKSPACE) {
 		return focus->sway_workspace;
@@ -1404,8 +1443,8 @@ struct sway_workspace *seat_get_last_known_workspace(struct sway_seat *seat) {
 	wl_list_for_each(current, &seat->focus_stack, link) {
 		struct sway_node *node = current->node;
 		if (node->type == N_CONTAINER &&
-				node->sway_container->workspace) {
-			return node->sway_container->workspace;
+				node->sway_container->pending.workspace) {
+			return node->sway_container->pending.workspace;
 		} else if (node->type == N_WORKSPACE) {
 			return node->sway_workspace;
 		}

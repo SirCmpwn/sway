@@ -1,5 +1,4 @@
 #include "sway/config.h"
-#include "sway/desktop/transaction.h"
 #include "sway/input/switch.h"
 #include <wlr/types/wlr_idle.h>
 #include "log.h"
@@ -61,9 +60,6 @@ static void execute_binding(struct sway_switch *sway_switch) {
 		seat_execute_command(seat, dummy_binding);
 		free(dummy_binding);
 	}
-
-	transaction_commit_dirty();
-
 }
 
 static void handle_switch_toggle(struct wl_listener *listener, void *data) {

@@ -28,6 +28,12 @@ struct sway_view;
  */
 void transaction_commit_dirty(void);
 
+/*
+ * Same as transaction_commit_dirty, but signalling that this is a
+ * client-initiated change has already taken effect.
+ */
+void transaction_commit_dirty_client(void);
+
 /**
  * Notify the transaction system that a view is ready for the new layout.
  *
@@ -44,11 +50,5 @@ void transaction_notify_view_ready_by_serial(struct sway_view *view,
  */
 void transaction_notify_view_ready_by_geometry(struct sway_view *view,
 		double x, double y, int width, int height);
-
-/**
- * Unconditionally notify the transaction system that a view is ready for the
- * new layout.
- */
-void transaction_notify_view_ready_immediately(struct sway_view *view);
 
 #endif

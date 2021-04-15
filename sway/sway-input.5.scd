@@ -111,6 +111,9 @@ The following commands may only be used in the configuration file.
 	Maps inputs from this device to the specified output. Only meaningful if the
 	device is a pointer, touch, or drawing tablet device.
 
+	The wildcard _\*_ can be used to map the input device to the whole desktop
+	layout.
+
 *input* <identifier> map_to_region <X> <Y> <width> <height>
 	Maps inputs from this device to the specified region of the global output
 	layout. Only meaningful if the device is a pointer, touch, or drawing tablet

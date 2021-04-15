@@ -4,7 +4,7 @@
 #include "util.h"
 
 // Must be in alphabetical order for bsearch
-static struct cmd_handler bar_colors_handlers[] = {
+static const struct cmd_handler bar_colors_handlers[] = {
 	{ "active_workspace", bar_colors_cmd_active_workspace },
 	{ "background", bar_colors_cmd_background },
 	{ "binding_mode", bar_colors_cmd_binding_mode },

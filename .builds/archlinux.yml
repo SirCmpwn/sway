@@ -13,7 +13,9 @@ packages:
   - wayland
   - wayland-protocols
   - xcb-util-image
+  - xcb-util-wm
   - xorg-xwayland
+  - seatd
 sources:
   - https://github.com/swaywm/sway
   - https://github.com/swaywm/wlroots

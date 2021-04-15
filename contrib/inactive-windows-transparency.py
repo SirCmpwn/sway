@@ -15,8 +15,13 @@ def on_window_focus(inactive_opacity, ipc, event):
     global prev_focused
     global prev_workspace
 
+    focused_workspace = ipc.get_tree().find_focused()
+
+    if focused_workspace == None:
+        return
+
     focused = event.container
-    workspace = ipc.get_tree().find_focused().workspace().num
+    workspace = focused_workspace.workspace().num
 
     if focused.id != prev_focused.id:  # https://github.com/swaywm/sway/issues/2859
         focused.command("opacity 1")
