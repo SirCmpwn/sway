@@ -318,4 +318,12 @@ keyboard_shortcuts_inhibitor_get_for_surface(const struct sway_seat *seat,
 struct sway_keyboard_shortcuts_inhibitor *
 keyboard_shortcuts_inhibitor_get_for_focused_surface(const struct sway_seat *seat);
 
+/**
+ * Returns the keyboard shortcuts inhibitor that applies to the given surface
+ * or NULL if none exists. It looks at inhibitors attached to all seats.
+ */
+struct sway_keyboard_shortcuts_inhibitor *
+keyboard_shortcuts_inhibitor_get_for_surface_on_any_seat(
+		const struct wlr_surface *surface);
+
 #endif

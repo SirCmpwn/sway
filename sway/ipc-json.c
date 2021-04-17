@@ -170,6 +170,19 @@ static const char *ipc_json_user_idle_inhibitor_description(enum sway_idle_inhib
 	return NULL;
 }
 
+static const char *ipc_json_keyboard_shortcuts_inhibitor_description(
+		struct sway_keyboard_shortcuts_inhibitor *sway_inhibitor) {
+	if (!sway_inhibitor) {
+		return "none";
+	}
+
+	if (!sway_inhibitor->inhibitor->active) {
+		return "inactive";
+	}
+
+	return "active";
+}
+
 json_object *ipc_json_get_version(void) {
 	int major = 0, minor = 0, patch = 0;
 	json_object *version = json_object_new_object();
@@ -543,6 +556,12 @@ static void ipc_json_describe_view(struct sway_container *c, json_object *object
 	}
 
 	json_object_object_add(object, "idle_inhibitors", idle_inhibitors);
+
+	json_object_object_add(object, "keyboard_shortcuts_inhibitor",
+		json_object_new_string(
+			ipc_json_keyboard_shortcuts_inhibitor_description(
+				keyboard_shortcuts_inhibitor_get_for_surface_on_any_seat(
+					c->view->surface))));
 
 #if HAVE_XWAYLAND
 	if (c->view->type == SWAY_VIEW_XWAYLAND) {
