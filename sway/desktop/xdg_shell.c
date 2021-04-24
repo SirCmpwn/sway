@@ -320,14 +320,14 @@ static void handle_set_title(struct wl_listener *listener, void *data) {
 		wl_container_of(listener, xdg_shell_view, set_title);
 	struct sway_view *view = &xdg_shell_view->view;
 	view_update_title(view, false);
-	view_execute_criteria(view);
+	view_execute_criteria(view, "title");
 }
 
 static void handle_set_app_id(struct wl_listener *listener, void *data) {
 	struct sway_xdg_shell_view *xdg_shell_view =
 		wl_container_of(listener, xdg_shell_view, set_app_id);
 	struct sway_view *view = &xdg_shell_view->view;
-	view_execute_criteria(view);
+	view_execute_criteria(view, "app_id");
 }
 
 static void handle_new_popup(struct wl_listener *listener, void *data) {

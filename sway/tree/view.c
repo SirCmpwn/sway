@@ -488,8 +488,8 @@ static bool view_has_executed_criteria(struct sway_view *view,
 	return false;
 }
 
-void view_execute_criteria(struct sway_view *view) {
-	list_t *criterias = criteria_for_view(view, CT_COMMAND);
+void view_execute_criteria(struct sway_view *view, const char* trigger) {
+	list_t *criterias = criteria_for_view(view, CT_COMMAND, trigger);
 	for (int i = 0; i < criterias->length; i++) {
 		struct criteria *criteria = criterias->items[i];
 		sway_log(SWAY_DEBUG, "Checking criteria %s", criteria->raw);
@@ -536,7 +536,7 @@ static struct sway_workspace *select_workspace(struct sway_view *view) {
 
 	// Check if there's any `assign` criteria for the view
 	list_t *criterias = criteria_for_view(view,
-			CT_ASSIGN_WORKSPACE | CT_ASSIGN_WORKSPACE_NUMBER | CT_ASSIGN_OUTPUT);
+			CT_ASSIGN_WORKSPACE | CT_ASSIGN_WORKSPACE_NUMBER | CT_ASSIGN_OUTPUT, NULL);
 	struct sway_workspace *ws = NULL;
 	for (int i = 0; i < criterias->length; ++i) {
 		struct criteria *criteria = criterias->items[i];
@@ -616,7 +616,7 @@ static bool should_focus(struct sway_view *view) {
 	}
 
 	// Check no_focus criteria
-	list_t *criterias = criteria_for_view(view, CT_NO_FOCUS);
+	list_t *criterias = criteria_for_view(view, CT_NO_FOCUS, NULL);
 	size_t len = criterias->length;
 	list_free(criterias);
 	return len == 0;
@@ -799,7 +799,7 @@ void view_map(struct sway_view *view, struct wlr_surface *wlr_surface,
 		}
 	}
 
-	view_execute_criteria(view);
+	view_execute_criteria(view, "map");
 
 	bool set_focus = should_focus(view);
 

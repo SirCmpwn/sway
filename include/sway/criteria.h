@@ -34,6 +34,7 @@ struct criteria {
 	struct pattern *shell;
 	struct pattern *app_id;
 	struct pattern *con_mark;
+	char *trigger; // event that triggered this criteria match
 	uint32_t con_id; // internal ID
 #if HAVE_XWAYLAND
 	struct pattern *class;
@@ -71,11 +72,11 @@ struct criteria *criteria_parse(char *raw, char **error);
  *
  * Criteria types can be bitwise ORed.
  */
-list_t *criteria_for_view(struct sway_view *view, enum criteria_type types);
+list_t *criteria_for_view(struct sway_view *view, enum criteria_type types, const char* trigger);
 
 /**
  * Compile a list of containers matching the given criteria.
  */
-list_t *criteria_get_containers(struct criteria *criteria);
+list_t *criteria_get_containers(struct criteria *criteria, const char* trigger);
 
 #endif

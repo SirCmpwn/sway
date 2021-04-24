@@ -345,7 +345,7 @@ void view_update_title(struct sway_view *view, bool force);
  * Run any criteria that match the view and haven't been run on this view
  * before.
  */
-void view_execute_criteria(struct sway_view *view);
+void view_execute_criteria(struct sway_view *view, const char* trigger);
 
 /**
  * Returns true if there's a possibility the view may be rendered on screen.
