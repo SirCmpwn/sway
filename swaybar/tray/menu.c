@@ -531,20 +531,9 @@ static struct swaybar_popup_hotspot* find_hotspot(list_t * hotspots, int x, int 
        return NULL;
 }
 
-static void show_popup_id(struct swaybar_sni *sni, int id) {
-	sway_log(SWAY_DEBUG, "%s%s showing popup for id %d", sni->service, sni->menu_path, id);
-
-	cairo_surface_t *recorder =
-		cairo_recording_surface_create(CAIRO_CONTENT_COLOR_ALPHA, NULL);
-	cairo_t *cairo = cairo_create(recorder);
-
-	list_t *hotspots = create_list();
-	struct swaybar_popup_surface *popup_surface =
-		calloc(1, sizeof(struct swaybar_popup_surface));
-	if (!(hotspots && popup_surface)) {
-		goto error;
-	}
-
+static list_t* draw_menu_items(cairo_t *cairo, struct swaybar_sni *sni, int id,
+							   int *surface_x, int *surface_y, int *surface_width,
+							   int *surface_height) {
 	struct swaybar_tray *tray = sni->tray;
 	struct swaybar_popup *popup = tray->popup;
 	struct swaybar_output *output = popup->output;
@@ -556,6 +545,17 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 	struct swaybar_menu_item *root = *menu_find_item(&sni->menu, id);
 	list_t *items = root->children;
 	int height = 0;
+
+	list_t * hotspots = create_list();
+	if (!hotspots) {
+		return NULL;
+	}
+
+	*surface_y = 0;
+    *surface_x = 0;
+	*surface_width = 0;
+	bool is_icon_drawn = false;
+	int icon_size = 0;
 	for (int i = 0; i < items->length; ++i) {
 		struct swaybar_menu_item *item = items->items[i];
 
@@ -568,7 +568,7 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 			// drawn later, after the width is known
 			new_height = height + output->scale;
 		} else if (item->label) {
-			cairo_move_to(cairo, 0, height + padding);
+			cairo_move_to(cairo, padding, height + padding);
 
 			// draw label
 			if (item->enabled) {
@@ -582,18 +582,21 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 
 			// draw icon or menu indicator if needed
 			int text_height;
+			int text_width;
 			get_text_size(cairo,
 					config->font,
-					NULL,
+				    &text_width,
 					&text_height,
 					NULL,
 					output->scale,
 					false,
 					"%s",
 					item->label);
+			text_width += padding;
 			int size = text_height;
 			int x = -2 * padding - size;
 			int y = height + padding;
+			icon_size = 2 * padding + size;
 			cairo_set_source_u32(cairo, config->colors.focused_statusline);
 			if (item->icon_name) {
 				list_t *icon_search_paths = create_list();
@@ -623,6 +626,7 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 					cairo_rectangle(cairo, x, y, size, size);
 					cairo_fill(cairo);
 					cairo_surface_destroy(icon_scaled);
+					is_icon_drawn = true;
 				}
 			} else if (item->icon_data) {
 				cairo_surface_t *icon =
@@ -631,6 +635,7 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 				cairo_rectangle(cairo, x, y, size, size);
 				cairo_fill(cairo);
 				cairo_surface_destroy(icon);
+				is_icon_drawn = true;
 			} else if (item->toggle_type == MENU_CHECKMARK) {
 				cairo_rectangle(cairo, x, y, size, size);
 				cairo_fill(cairo);
@@ -645,22 +650,26 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 					cairo_fill(cairo);
 				}
 				cairo_set_operator(cairo, CAIRO_OPERATOR_OVER);
+				is_icon_drawn = true;
 			} else if (item->toggle_type == MENU_RADIO) {
 				cairo_arc(cairo, x + size/2, y + size/2, size/2, 0, 7);
 				cairo_fill(cairo);
 				if (item->toggle_state == 1) {
 					cairo_set_operator(cairo, CAIRO_OPERATOR_CLEAR);
-					cairo_arc(cairo, x + size/2, y + size/2, size/4, 0, 7);
+					cairo_arc(cairo, x + size / 2.0, y + size / 2.0, size / 4.0, 0, 7);
 					cairo_fill(cairo);
 					cairo_set_operator(cairo, CAIRO_OPERATOR_OVER);
 				}
+				is_icon_drawn = true;
 			} else if (item->children) { // arrowhead
 				cairo_move_to(cairo, x + size/4, y + size/2);
 				cairo_line_to(cairo, x + size*3/4, y + size/4);
 				cairo_line_to(cairo, x + size*3/4, y + size*3/4);
 				cairo_fill(cairo);
+				is_icon_drawn = true;
 			}
 
+			*surface_width = *surface_width < text_width ? text_width : *surface_width;
 			new_height = height + text_height + 2 * padding;
 		} else {
 			continue;
@@ -681,52 +690,253 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 	}
 
 	if (height == 0) {
+		list_free_items_and_destroy(hotspots);
+		return NULL;
+	}
+
+	if (is_icon_drawn) {
+		*surface_x = -icon_size - padding;
+		*surface_width += icon_size + padding;
+	}
+
+	*surface_width += padding;
+	*surface_height = height + 2 * padding;
+
+	// Make sure height and width are divideable by scale
+	*surface_height += output->scale - *surface_height % output->scale;
+	*surface_width += output->scale - *surface_width % output->scale;
+
+	cairo_set_line_width(cairo, output->scale);
+	cairo_set_source_u32(cairo, config->colors.focused_separator);
+	for (int i = 0; i < hotspots->length; ++i) {
+		struct swaybar_popup_hotspot *hotspot = hotspots->items[i];
+		hotspot->x = 0;
+		hotspot->width = *surface_width;
+		if (hotspot->item->is_separator) {
+			int y = hotspot->y + hotspot->height / 2.0;
+			cairo_move_to(cairo, *surface_x, y);
+			cairo_line_to(cairo, *surface_x + *surface_width, y);
+			cairo_stroke(cairo);
+		} else if (hotspot->item->enabled
+				   && is_in_hotspot(hotspot,
+									tray->popup->seat->pointer.x
+									* popup->output->scale,
+									tray->popup->seat->pointer.y
+									* popup->output->scale)) {
+			cairo_save(cairo);
+			cairo_set_operator(cairo, CAIRO_OPERATOR_DEST_OVER);
+			cairo_rectangle(cairo,
+							*surface_x,
+							hotspot->y,
+							*surface_width,
+							hotspot->height);
+			cairo_set_source_u32(
+				cairo, sni->tray->bar->config->colors.focused_separator);
+			cairo_fill(cairo);
+			cairo_restore(cairo);
+		}
+	}
+
+	return hotspots;
+}
+
+static void show_popup_id(struct swaybar_sni *sni, int id) {
+	sway_log(SWAY_DEBUG, "%s%s showing popup for id %d", sni->service, sni->menu_path, id);
+
+	cairo_surface_t *recorder =
+		cairo_recording_surface_create(CAIRO_CONTENT_COLOR_ALPHA, NULL);
+	cairo_t *cairo = cairo_create(recorder);
+
+	int surface_x, surface_y, surface_width, surface_height;
+	list_t* hotspots = draw_menu_items(cairo, sni, id, &surface_x, &surface_y,
+									   &surface_width, &surface_height);
+	struct swaybar_popup_surface *popup_surface =
+		calloc(1, sizeof(struct swaybar_popup_surface));
+	if (!(hotspots && popup_surface)) {
 		goto error;
 	}
 
-		// draw separators
-		double surface_dx, surface_dy, surface_dwidth, surface_dheight;
-		cairo_recording_surface_ink_extents(recorder,
-				&surface_dx,
-				&surface_dy,
-				&surface_dwidth,
-				&surface_dheight);
-		int surface_x = surface_dx - padding;
-		int surface_y = surface_dy - padding;
-		int surface_width = surface_dwidth + 2 * padding;
-		int surface_height = surface_dheight + 2 * padding;
+	struct swaybar_tray *tray = sni->tray;
+	struct swaybar_popup *popup = tray->popup;
+	struct swaybar_output *output = popup->output;
 
-		// Make sure height and width are divideable by scale
-		surface_height += output->scale - surface_height % output->scale;
-		surface_width += output->scale - surface_width % output->scale;
+	struct swaybar *bar = tray->bar;
+	struct swaybar_config *config = bar->config;
 
-		cairo_set_line_width(cairo, output->scale);
-		cairo_set_source_u32(cairo, config->colors.focused_separator);
-		for (int i = 0; i < hotspots->length; ++i) {
-			struct swaybar_popup_hotspot *hotspot = hotspots->items[i];
-			hotspot->x = 0;
-			hotspot->width = surface_width;
-			if (hotspot->item->is_separator) {
-				int y = hotspot->y + hotspot->height / 2.0;
-				cairo_move_to(cairo, surface_x, y);
-				cairo_line_to(cairo, surface_x + surface_width, y);
-				cairo_stroke(cairo);
-			} else if (hotspot->item->enabled
-					   && is_in_hotspot(hotspot, tray->popup->seat->pointer.x * popup->output->scale,
-										tray->popup->seat->pointer.y * popup->output->scale)) {
-				                       cairo_save(cairo);
-                       cairo_set_operator(cairo, CAIRO_OPERATOR_DEST_OVER);
-                       cairo_rectangle(cairo,
-                                       surface_x,
-                                       hotspot->y,
-                                       surface_width,
-                                       hotspot->height);
-                       cairo_set_source_u32(
-                                       cairo, sni->tray->bar->config->colors.focused_separator);
-                       cairo_fill(cairo);
-                       cairo_restore(cairo);
-			}
-		}
+	/* struct swaybar_menu_item *root = *menu_find_item(&sni->menu, id); */
+	/* list_t *items = root->children; */
+	/* int height = 0; */
+	/* for (int i = 0; i < items->length; ++i) { */
+	/* 	struct swaybar_menu_item *item = items->items[i]; */
+
+	/* 	if (!item->visible) { */
+	/* 		continue; */
+	/* 	} */
+
+	/* 	int new_height = height; */
+	/* 	if (item->is_separator) { */
+	/* 		// drawn later, after the width is known */
+	/* 		new_height = height + output->scale; */
+	/* 	} else if (item->label) { */
+	/* 		cairo_move_to(cairo, 0, height + padding); */
+
+	/* 		// draw label */
+	/* 		if (item->enabled) { */
+	/* 			cairo_set_source_u32(cairo, config->colors.focused_statusline); */
+	/* 		} else { */
+	/* 			uint32_t c = config->colors.focused_statusline; */
+	/* 			uint32_t disabled_color = c - ((c & 0xFF) >> 1); */
+	/* 			cairo_set_source_u32(cairo, disabled_color); */
+	/* 		} */
+	/* 		pango_printf(cairo, config->font, output->scale, false, "%s", item->label); */
+
+	/* 		// draw icon or menu indicator if needed */
+	/* 		int text_height; */
+	/* 		get_text_size(cairo, */
+	/* 				config->font, */
+	/* 				NULL, */
+	/* 				&text_height, */
+	/* 				NULL, */
+	/* 				output->scale, */
+	/* 				false, */
+	/* 				"%s", */
+	/* 				item->label); */
+	/* 		int size = text_height; */
+	/* 		int x = -2 * padding - size; */
+	/* 		int y = height + padding; */
+	/* 		cairo_set_source_u32(cairo, config->colors.focused_statusline); */
+	/* 		if (item->icon_name) { */
+	/* 			list_t *icon_search_paths = create_list(); */
+	/* 			list_cat(icon_search_paths, tray->basedirs); */
+	/* 			if (sni->menu_icon_theme_paths) { */
+	/* 				for (char **path = sni->menu_icon_theme_paths; *path; ++path) { */
+	/* 					list_add(icon_search_paths, *path); */
+	/* 				} */
+	/* 			} */
+	/* 			if (sni->icon_theme_path) { */
+	/* 				list_add(icon_search_paths, sni->icon_theme_path); */
+	/* 			} */
+	/* 			int min_size, max_size; */
+	/* 			char *icon_path = find_icon(tray->themes, icon_search_paths, */
+	/* 					item->icon_name, size, config->icon_theme, */
+	/* 					&min_size, &max_size); */
+	/* 			list_free(icon_search_paths); */
+
+	/* 			if (icon_path) { */
+	/* 				cairo_surface_t *icon = load_background_image(icon_path); */
+	/* 				free(icon_path); */
+	/* 				cairo_surface_t *icon_scaled = */
+	/* 					cairo_image_surface_scale(icon, size, size); */
+	/* 				cairo_surface_destroy(icon); */
+
+	/* 				cairo_set_source_surface(cairo, icon_scaled, x, y); */
+	/* 				cairo_rectangle(cairo, x, y, size, size); */
+	/* 				cairo_fill(cairo); */
+	/* 				cairo_surface_destroy(icon_scaled); */
+	/* 			} */
+	/* 		} else if (item->icon_data) { */
+	/* 			cairo_surface_t *icon = */
+	/* 				cairo_image_surface_scale(item->icon_data, size, size); */
+	/* 			cairo_set_source_surface(cairo, icon, x, y); */
+	/* 			cairo_rectangle(cairo, x, y, size, size); */
+	/* 			cairo_fill(cairo); */
+	/* 			cairo_surface_destroy(icon); */
+	/* 		} else if (item->toggle_type == MENU_CHECKMARK) { */
+	/* 			cairo_rectangle(cairo, x, y, size, size); */
+	/* 			cairo_fill(cairo); */
+	/* 			cairo_set_operator(cairo, CAIRO_OPERATOR_CLEAR); */
+	/* 			if (item->toggle_state == 1) { // tick */
+	/* 				cairo_move_to(cairo, x + size*3/4, y + size*5/16); */
+	/* 				cairo_line_to(cairo, x + size*3/8, y + size*11/16); */
+	/* 				cairo_line_to(cairo, x + size/4, y + size*9/16); */
+	/* 				cairo_stroke(cairo); */
+	/* 			} else if (item->toggle_state != 0) { // horizontal line */
+	/* 				cairo_rectangle(cairo, x + size/4, y + size/2 - 1, size/2, 2); */
+	/* 				cairo_fill(cairo); */
+	/* 			} */
+	/* 			cairo_set_operator(cairo, CAIRO_OPERATOR_OVER); */
+	/* 		} else if (item->toggle_type == MENU_RADIO) { */
+	/* 			cairo_arc(cairo, x + size/2, y + size/2, size/2, 0, 7); */
+	/* 			cairo_fill(cairo); */
+	/* 			if (item->toggle_state == 1) { */
+	/* 				cairo_set_operator(cairo, CAIRO_OPERATOR_CLEAR); */
+	/* 				cairo_arc(cairo, x + size/2, y + size/2, size/4, 0, 7); */
+	/* 				cairo_fill(cairo); */
+	/* 				cairo_set_operator(cairo, CAIRO_OPERATOR_OVER); */
+	/* 			} */
+	/* 		} else if (item->children) { // arrowhead */
+	/* 			cairo_move_to(cairo, x + size/4, y + size/2); */
+	/* 			cairo_line_to(cairo, x + size*3/4, y + size/4); */
+	/* 			cairo_line_to(cairo, x + size*3/4, y + size*3/4); */
+	/* 			cairo_fill(cairo); */
+	/* 		} */
+
+	/* 		new_height = height + text_height + 2 * padding; */
+	/* 	} else { */
+	/* 		continue; */
+	/* 	} */
+
+	/* 	struct swaybar_popup_hotspot *hotspot = */
+	/* 		malloc(sizeof(struct swaybar_popup_hotspot)); */
+	/* 	hotspot->y_old = height; */
+
+	/* 	hotspot->y = height; */
+	/* 	hotspot->height = new_height - height; */
+	/* 	// x and width is not known at the moment */
+
+	/* 	hotspot->item = item; */
+	/* 	list_add(hotspots, hotspot); */
+
+	/* 	height = new_height; */
+	/* } */
+
+	/* if (height == 0) { */
+	/* 	goto error; */
+	/* } */
+
+	/* 	// draw separators */
+	/* 	double surface_dx, surface_dy, surface_dwidth, surface_dheight; */
+	/* 	cairo_recording_surface_ink_extents(recorder, */
+	/* 			&surface_dx, */
+	/* 			&surface_dy, */
+	/* 			&surface_dwidth, */
+	/* 			&surface_dheight); */
+	/* 	int surface_x = surface_dx - padding; */
+	/* 	int surface_y = surface_dy - padding; */
+	/* 	int surface_width = surface_dwidth + 2 * padding; */
+	/* 	int surface_height = surface_dheight + 2 * padding; */
+
+	/* 	// Make sure height and width are divideable by scale */
+	/* 	surface_height += output->scale - surface_height % output->scale; */
+	/* 	surface_width += output->scale - surface_width % output->scale; */
+
+	/* 	cairo_set_line_width(cairo, output->scale); */
+	/* 	cairo_set_source_u32(cairo, config->colors.focused_separator); */
+	/* 	for (int i = 0; i < hotspots->length; ++i) { */
+	/* 		struct swaybar_popup_hotspot *hotspot = hotspots->items[i]; */
+	/* 		hotspot->x = 0; */
+	/* 		hotspot->width = surface_width; */
+	/* 		if (hotspot->item->is_separator) { */
+	/* 			int y = hotspot->y + hotspot->height / 2.0; */
+	/* 			cairo_move_to(cairo, surface_x, y); */
+	/* 			cairo_line_to(cairo, surface_x + surface_width, y); */
+	/* 			cairo_stroke(cairo); */
+	/* 		} else if (hotspot->item->enabled */
+	/* 				   && is_in_hotspot(hotspot, tray->popup->seat->pointer.x * popup->output->scale, */
+	/* 									tray->popup->seat->pointer.y * popup->output->scale)) { */
+	/* 			                       cairo_save(cairo); */
+    /*                    cairo_set_operator(cairo, CAIRO_OPERATOR_DEST_OVER); */
+    /*                    cairo_rectangle(cairo, */
+    /*                                    surface_x, */
+    /*                                    hotspot->y, */
+    /*                                    surface_width, */
+    /*                                    hotspot->height); */
+    /*                    cairo_set_source_u32( */
+    /*                                    cairo, sni->tray->bar->config->colors.focused_separator); */
+    /*                    cairo_fill(cairo); */
+    /*                    cairo_restore(cairo); */
+	/* 		} */
+	/* 	} */
 
 		// draw popup surface
 		popup_surface->current_buffer = get_next_buffer(tray->bar->shm,
@@ -801,6 +1011,7 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 		wl_surface_damage(surface, 0, 0, surface_width, surface_height);
 		wl_surface_commit(surface);
 
+		struct swaybar_menu_item *root = *menu_find_item(&sni->menu, id);
 		popup_surface->item = root;
 		popup_surface->hotspots = hotspots;
 		popup_surface->xdg_popup = xdg_popup;
@@ -832,7 +1043,7 @@ cleanup:
 	cairo_destroy(cairo);
 	return;
 error:
-	list_free_items_and_destroy(hotspots);
+	// list_free_items_and_destroy(hotspots);
 	free(popup_surface);
 	goto cleanup;
 }
