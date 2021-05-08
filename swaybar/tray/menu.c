@@ -35,7 +35,7 @@ void destroy_menu(struct swaybar_menu_item *menu) {
 
 	struct swaybar_popup *popup = menu->sni->tray->popup;
 	if (popup && popup->sni == menu->sni) {
-		close_popup(popup);
+		// close_popup(popup);
 	}
 
 	free(menu->label);
@@ -256,7 +256,7 @@ static int get_layout_callback(sd_bus_message *msg, void *data,
 		sni->menu = NULL;
 	} else if (popup->sni == sni) {
 		if (popup->popup_surface) {
-			close_popup(popup); // TODO enhancement: redraw instead of closing
+			// close_popup(popup); // TODO enhancement: redraw instead of closing
 		} else {
 			open_popup_id(sni, 0);
 		}
@@ -338,7 +338,7 @@ static int handle_items_properties_updated(sd_bus_message *msg, void *data,
 
 	struct swaybar_popup *popup = sni->tray->popup;
 	if (popup->sni == sni) {
-		close_popup(popup); // TODO enhancement: redraw instead of closing
+		// close_popup(popup); // TODO enhancement: redraw instead of closing
 	}
 
 	return 0;
@@ -565,9 +565,9 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 					false,
 					"%s",
 					item->label);
-			int size = 16 * output->scale;
+			int size = text_height;
 			int x = -2 * padding - size;
-			int y = height + padding + (text_height - size + 1) / 2;
+			int y = height + padding;
 			cairo_set_source_u32(cairo, config->colors.focused_statusline);
 			if (item->icon_name) {
 				list_t *icon_search_paths = create_list();
@@ -651,93 +651,132 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 		goto error;
 	}
 
-	// draw separators
-	double ox, w;
-	cairo_recording_surface_ink_extents(recorder, &ox, NULL, &w, NULL);
-	ox -= 2 * padding;
-	int width = w + 4 * padding;
+		// draw separators
+		double surface_dx, surface_dy, surface_dwidth, surface_dheight;
+		cairo_recording_surface_ink_extents(recorder,
+				&surface_dx,
+				&surface_dy,
+				&surface_dwidth,
+				&surface_dheight);
+		int surface_x = surface_dx - padding;
+		int surface_y = surface_dy - padding;
+		int surface_width = surface_dwidth + 2 * padding;
+		int surface_height = surface_dheight + 2 * padding;
 
-	cairo_set_line_width(cairo, output->scale);
-	cairo_set_source_u32(cairo, config->colors.focused_separator);
-	for (int i = 0; i < hotspots->length; ++i) {
-		struct swaybar_popup_hotspot *hotspot = hotspots->items[i];
-		if (hotspot->item->is_separator) {
-			cairo_move_to(cairo, ox, hotspot->y - 1 / 2);
-			cairo_line_to(cairo, ox + width, hotspot->y - 1 / 2);
-			cairo_stroke(cairo);
+		// Make sure height and width are divideable by scale
+		surface_height += output->scale - surface_height % output->scale;
+		surface_width += output->scale - surface_width % output->scale;
+
+		cairo_set_line_width(cairo, output->scale);
+		cairo_set_source_u32(cairo, config->colors.focused_separator);
+		for (int i = 0; i < hotspots->length; ++i) {
+			struct swaybar_popup_hotspot *hotspot = hotspots->items[i];
+			if (hotspot->item->is_separator) {
+				cairo_move_to(cairo, surface_x, hotspot->y - 1 / 2);
+				cairo_line_to(
+						cairo, surface_x + surface_width, hotspot->y - 1 / 2);
+				cairo_stroke(cairo);
+			}
 		}
-	}
 
-	// draw popup surface
-	popup_surface->current_buffer = get_next_buffer(
-			tray->bar->shm, popup_surface->buffers, width, height);
-	if (!popup_surface->current_buffer) {
-		goto error;
-	}
-	cairo_t *shm = popup_surface->current_buffer->cairo;
-
-	cairo_set_operator(shm, CAIRO_OPERATOR_SOURCE);
-	cairo_set_source_u32(shm, config->colors.focused_background);
-	cairo_paint(shm);
-
-	cairo_set_operator(shm, CAIRO_OPERATOR_OVER);
-	cairo_set_source_surface(shm, recorder, -ox, 0);
-	cairo_paint(shm);
-
-	// configure & position popup surface
-	struct wl_surface *surface = wl_compositor_create_surface(bar->compositor);
-	struct xdg_surface *xdg_surface =
-		xdg_wm_base_get_xdg_surface(popup->wm_base, surface);
-	struct xdg_positioner *positioner = xdg_wm_base_create_positioner(popup->wm_base);
-
-	int x = popup->x;
-	int y = popup->y;
-	xdg_positioner_set_anchor_rect(positioner, x, y, 1, 1);
-	xdg_positioner_set_offset(positioner, 0, 0);
-	xdg_positioner_set_size(positioner, width / output->scale, height / output->scale);
-	if (config->position & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) { // top bar
-		xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_BOTTOM_LEFT);
-		xdg_positioner_set_gravity(positioner, XDG_POSITIONER_GRAVITY_BOTTOM_LEFT);
-	} else {
-		xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_TOP_LEFT);
-		xdg_positioner_set_gravity(positioner, XDG_POSITIONER_GRAVITY_TOP_LEFT);
-	}
-
-	struct xdg_popup *xdg_popup;
-	if (!popup->popup_surface) { // top-level popup
-		xdg_popup = xdg_surface_get_popup(xdg_surface, NULL, positioner);
-		zwlr_layer_surface_v1_get_popup(output->layer_surface, xdg_popup);
-		popup->popup_surface = popup_surface;
-	} else { // nested popup
-		struct swaybar_popup_surface *parent = popup->popup_surface;
-		while (parent->child) {
-			parent = parent->child;
+		// draw popup surface
+		popup_surface->current_buffer = get_next_buffer(tray->bar->shm,
+				popup_surface->buffers,
+				surface_width,
+				surface_height);
+		if (!popup_surface->current_buffer) {
+			goto error;
 		}
-		xdg_popup = xdg_surface_get_popup(xdg_surface, parent->xdg_surface, positioner);
-		parent->child = popup_surface;
-	}
-	xdg_popup_grab(xdg_popup, popup->seat, popup->serial);
-	xdg_popup_add_listener(xdg_popup, &xdg_popup_listener, popup);
-	xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, NULL);
-	wl_surface_commit(surface);
+		cairo_t *shm = popup_surface->current_buffer->cairo;
 
-	wl_display_roundtrip(bar->display);
-	xdg_positioner_destroy(positioner);
+		cairo_set_operator(shm, CAIRO_OPERATOR_SOURCE);
+		cairo_set_source_u32(shm, config->colors.focused_background);
+		cairo_paint(shm);
 
-	wl_surface_set_buffer_scale(surface, output->scale);
-	wl_surface_attach(surface, popup_surface->current_buffer->buffer, 0, 0);
-	wl_surface_damage(surface, 0, 0, width, height);
-	wl_surface_commit(surface);
+		cairo_set_operator(shm, CAIRO_OPERATOR_OVER);
+		cairo_set_source_surface(shm, recorder, -surface_x, -surface_y);
+		cairo_paint(shm);
 
-	popup_surface->item = root;
-	popup_surface->hotspots = hotspots;
-	popup_surface->xdg_popup = xdg_popup;
-	popup_surface->xdg_surface = xdg_surface;
-	popup_surface->surface = surface;
+		// configure & position popup surface
+		struct wl_surface *surface =
+				wl_compositor_create_surface(bar->compositor);
+		struct xdg_surface *xdg_surface =
+				xdg_wm_base_get_xdg_surface(popup->wm_base, surface);
+		struct xdg_positioner *positioner =
+				xdg_wm_base_create_positioner(popup->wm_base);
 
-	sd_bus_call_method_async(sni->tray->bus, NULL, sni->service, sni->menu_path,
-			menu_interface, "Event", NULL, NULL, "isvu", id, "opened", "y", 0, time(NULL));
-	sway_log(SWAY_DEBUG, "%s%s opened id %d", sni->service, sni->menu_path, id);
+		int x = popup->x;
+		int y = popup->y;
+		xdg_positioner_set_anchor_rect(positioner, x, y, 1, 1);
+		xdg_positioner_set_offset(positioner, 0, 0);
+		// Need to divide through scale because surface width/height is scaled
+		xdg_positioner_set_size(positioner,
+				surface_width / output->scale,
+				surface_height / output->scale);
+		if (config->position & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) { // top bar
+			xdg_positioner_set_anchor(
+					positioner, XDG_POSITIONER_ANCHOR_BOTTOM_LEFT);
+			xdg_positioner_set_gravity(
+					positioner, XDG_POSITIONER_GRAVITY_BOTTOM_LEFT);
+		} else {
+			xdg_positioner_set_anchor(
+					positioner, XDG_POSITIONER_ANCHOR_TOP_LEFT);
+			xdg_positioner_set_gravity(
+					positioner, XDG_POSITIONER_GRAVITY_TOP_LEFT);
+		}
+
+		struct xdg_popup *xdg_popup;
+		if (!popup->popup_surface) { // top-level popup
+			xdg_popup = xdg_surface_get_popup(xdg_surface, NULL, positioner);
+			zwlr_layer_surface_v1_get_popup(output->layer_surface, xdg_popup);
+			popup->popup_surface = popup_surface;
+		} else { // nested popup
+			struct swaybar_popup_surface *parent = popup->popup_surface;
+			while (parent->child) {
+				parent = parent->child;
+			}
+			xdg_popup = xdg_surface_get_popup(
+					xdg_surface, parent->xdg_surface, positioner);
+			parent->child = popup_surface;
+		}
+		xdg_popup_grab(xdg_popup, popup->seat, popup->serial);
+		xdg_popup_add_listener(xdg_popup, &xdg_popup_listener, popup);
+		xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, NULL);
+		wl_surface_commit(surface);
+
+		wl_display_roundtrip(bar->display);
+		xdg_positioner_destroy(positioner);
+
+		wl_surface_set_buffer_scale(surface, output->scale);
+		wl_surface_attach(surface, popup_surface->current_buffer->buffer, 0, 0);
+		wl_surface_damage(surface, 0, 0, surface_width, surface_height);
+		wl_surface_commit(surface);
+
+		popup_surface->item = root;
+		popup_surface->hotspots = hotspots;
+		popup_surface->xdg_popup = xdg_popup;
+		popup_surface->xdg_surface = xdg_surface;
+		popup_surface->surface = surface;
+
+		sd_bus_call_method_async(sni->tray->bus,
+				NULL,
+				sni->service,
+				sni->menu_path,
+				menu_interface,
+				"Event",
+				NULL,
+				NULL,
+				"isvu",
+				id,
+				"opened",
+				"y",
+				0,
+				time(NULL));
+		sway_log(SWAY_DEBUG,
+				"%s%s opened id %d",
+				sni->service,
+				sni->menu_path,
+				id);
 
 cleanup:
 	cairo_surface_destroy(recorder);
