@@ -540,7 +540,7 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 		}
 
 		if (item->is_separator) {
-			++height; // drawn later, after the width is known
+			height += output->scale; // drawn later, after the width is known
 		} else if (item->label) {
 			cairo_move_to(cairo, 0, height + padding);
 
@@ -556,9 +556,16 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 
 			// draw icon or menu indicator if needed
 			int text_height;
-			get_text_size(cairo, config->font, NULL, &text_height, NULL,
-					output->scale, false, "%s", item->label);
-			int size = 16;
+			get_text_size(cairo,
+					config->font,
+					NULL,
+					&text_height,
+					NULL,
+					output->scale,
+					false,
+					"%s",
+					item->label);
+			int size = 16 * output->scale;
 			int x = -2 * padding - size;
 			int y = height + padding + (text_height - size + 1) / 2;
 			cairo_set_source_u32(cairo, config->colors.focused_statusline);
@@ -650,20 +657,20 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 	ox -= 2 * padding;
 	int width = w + 4 * padding;
 
-	cairo_set_line_width(cairo, 1);
+	cairo_set_line_width(cairo, output->scale);
 	cairo_set_source_u32(cairo, config->colors.focused_separator);
 	for (int i = 0; i < hotspots->length; ++i) {
 		struct swaybar_popup_hotspot *hotspot = hotspots->items[i];
 		if (hotspot->item->is_separator) {
-			cairo_move_to(cairo, ox, hotspot->y - 1/2);
-			cairo_line_to(cairo, ox + width, hotspot->y - 1/2);
+			cairo_move_to(cairo, ox, hotspot->y - 1 / 2);
+			cairo_line_to(cairo, ox + width, hotspot->y - 1 / 2);
 			cairo_stroke(cairo);
 		}
 	}
 
 	// draw popup surface
-	popup_surface->current_buffer = get_next_buffer(tray->bar->shm,
-			popup_surface->buffers, width, height);
+	popup_surface->current_buffer = get_next_buffer(
+			tray->bar->shm, popup_surface->buffers, width, height);
 	if (!popup_surface->current_buffer) {
 		goto error;
 	}
