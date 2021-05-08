@@ -160,7 +160,7 @@ static bool check_bindings(struct swaybar *bar, uint32_t button,
 	return false;
 }
 
-static bool process_hotspots(struct swaybar_output *output, struct wl_seat *seat, uint32_t serial,
+static bool process_hotspots(struct swaybar_output *output, struct swaybar_seat *seat, uint32_t serial,
 		double x, double y, uint32_t button) {
 	double px = x * output->scale;
 	double py = y * output->scale;
@@ -181,13 +181,13 @@ static bool process_hotspots(struct swaybar_output *output, struct wl_seat *seat
 
 static void wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
 		uint32_t serial, uint32_t time, uint32_t button, uint32_t state) {
+	struct swaybar_seat *seat = data;
 #if HAVE_TRAY
-	if (popup_pointer_button(data, wl_pointer, serial, time, button, state)) {
+	if (popup_pointer_button(seat, wl_pointer, serial, time, button, state)) {
 		return;
 	}
 #endif
 
-	struct swaybar_seat *seat = data;
 	struct swaybar_pointer *pointer = &seat->pointer;
 	struct swaybar_output *output = pointer->current;
 	if (!sway_assert(output, "button with no active output")) {
@@ -201,7 +201,7 @@ static void wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
 	if (state != WL_POINTER_BUTTON_STATE_PRESSED) {
 		return;
 	}
-	process_hotspots(output, seat->wl_seat, serial, pointer->x, pointer->y, button);
+	process_hotspots(output, seat, serial, pointer->x, pointer->y, button);
 }
 
 static void workspace_next(struct swaybar *bar, struct swaybar_output *output,
@@ -258,7 +258,7 @@ static void process_discrete_scroll(struct swaybar_seat *seat,
 		return;
 	}
 
-	if (process_hotspots(output, seat->wl_seat, 0, pointer->x, pointer->y, button)) {
+	if (process_hotspots(output, seat, 0, pointer->x, pointer->y, button)) {
 		return;
 	}
 
@@ -443,7 +443,7 @@ static void wl_touch_up(void *data, struct wl_touch *wl_touch,
 	}
 	if (time - slot->time < 500) {
 		// Tap, treat it like a pointer click
-		process_hotspots(slot->output, seat->wl_seat, serial, slot->x, slot->y, BTN_LEFT);
+		process_hotspots(slot->output, seat, serial, slot->x, slot->y, BTN_LEFT);
 	}
 	slot->output = NULL;
 }

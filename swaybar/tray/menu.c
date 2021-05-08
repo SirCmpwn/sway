@@ -35,7 +35,7 @@ void destroy_menu(struct swaybar_menu_item *menu) {
 
 	struct swaybar_popup *popup = menu->sni->tray->popup;
 	if (popup && popup->sni == menu->sni) {
-		// close_popup(popup);
+		close_popup(popup);
 	}
 
 	free(menu->label);
@@ -175,7 +175,7 @@ static int update_item_properties(struct swaybar_menu_item *item,
 			}
 			log_value = children_display;
 		} else {
-			// Ignored: shortcut, disposition
+			// Ignored: shortcut, disposition, disposition
 			sd_bus_message_skip(msg, "v");
 			log_value = "<ignored>";
 		}
@@ -227,8 +227,9 @@ static int get_layout_callback(sd_bus_message *msg, void *data,
 		if (parent) {
 			list_add(parent->children, item);
 		} else if (sni->menu) {
-			struct swaybar_menu_item **menu_ptr = menu_find_item(&sni->menu,
-					item->id);
+			struct swaybar_menu_item **menu_ptr =
+					menu_find_item(&sni->menu, item->id);
+			// TODO: Does it need to be destroyed? Could just update the layout
 			destroy_menu(*menu_ptr);
 			*menu_ptr = item;
 		} else {
@@ -256,7 +257,7 @@ static int get_layout_callback(sd_bus_message *msg, void *data,
 		sni->menu = NULL;
 	} else if (popup->sni == sni) {
 		if (popup->popup_surface) {
-			// close_popup(popup); // TODO enhancement: redraw instead of closing
+			close_popup(popup); // TODO enhancement: redraw instead of closing
 		} else {
 			open_popup_id(sni, 0);
 		}
@@ -507,6 +508,29 @@ static const struct xdg_popup_listener xdg_popup_listener = {
 	.popup_done = xdg_popup_done
 };
 
+static bool is_in_hotspot(struct swaybar_popup_hotspot * hotspot, int x, int y) {
+	if (!hotspot) {
+		return false;
+	}
+
+	if (hotspot->x <= x && x <= hotspot->x + hotspot->width
+		&& hotspot->y <= y  && y <= hotspot->y + hotspot->height) {
+		return true;
+	}
+
+	return false;
+}
+
+static struct swaybar_popup_hotspot* find_hotspot(list_t * hotspots, int x, int y) {
+       for (int i = 0; i < hotspots->length; i++) {
+               struct swaybar_popup_hotspot *hotspot = hotspots->items[i];
+               if (is_in_hotspot(hotspot, x, y)) {
+                       return hotspot;
+               }
+        }
+       return NULL;
+}
+
 static void show_popup_id(struct swaybar_sni *sni, int id) {
 	sway_log(SWAY_DEBUG, "%s%s showing popup for id %d", sni->service, sni->menu_path, id);
 
@@ -539,8 +563,10 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 			continue;
 		}
 
+		int new_height = height;
 		if (item->is_separator) {
-			height += output->scale; // drawn later, after the width is known
+			// drawn later, after the width is known
+			new_height = height + output->scale;
 		} else if (item->label) {
 			cairo_move_to(cairo, 0, height + padding);
 
@@ -635,16 +661,23 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 				cairo_fill(cairo);
 			}
 
-			height += text_height + 2 * padding;
+			new_height = height + text_height + 2 * padding;
 		} else {
 			continue;
 		}
 
 		struct swaybar_popup_hotspot *hotspot =
 			malloc(sizeof(struct swaybar_popup_hotspot));
+		hotspot->y_old = height;
+
 		hotspot->y = height;
+		hotspot->height = new_height - height;
+		// x and width is not known at the moment
+
 		hotspot->item = item;
 		list_add(hotspots, hotspot);
+
+		height = new_height;
 	}
 
 	if (height == 0) {
@@ -671,11 +704,27 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 		cairo_set_source_u32(cairo, config->colors.focused_separator);
 		for (int i = 0; i < hotspots->length; ++i) {
 			struct swaybar_popup_hotspot *hotspot = hotspots->items[i];
+			hotspot->x = 0;
+			hotspot->width = surface_width;
 			if (hotspot->item->is_separator) {
-				cairo_move_to(cairo, surface_x, hotspot->y - 1 / 2);
-				cairo_line_to(
-						cairo, surface_x + surface_width, hotspot->y - 1 / 2);
+				int y = hotspot->y + hotspot->height / 2.0;
+				cairo_move_to(cairo, surface_x, y);
+				cairo_line_to(cairo, surface_x + surface_width, y);
 				cairo_stroke(cairo);
+			} else if (hotspot->item->enabled
+					   && is_in_hotspot(hotspot, tray->popup->seat->pointer.x * popup->output->scale,
+										tray->popup->seat->pointer.y * popup->output->scale)) {
+				                       cairo_save(cairo);
+                       cairo_set_operator(cairo, CAIRO_OPERATOR_DEST_OVER);
+                       cairo_rectangle(cairo,
+                                       surface_x,
+                                       hotspot->y,
+                                       surface_width,
+                                       hotspot->height);
+                       cairo_set_source_u32(
+                                       cairo, sni->tray->bar->config->colors.focused_separator);
+                       cairo_fill(cairo);
+                       cairo_restore(cairo);
 			}
 		}
 
@@ -739,7 +788,7 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 					xdg_surface, parent->xdg_surface, positioner);
 			parent->child = popup_surface;
 		}
-		xdg_popup_grab(xdg_popup, popup->seat, popup->serial);
+		xdg_popup_grab(xdg_popup, popup->seat->wl_seat, popup->serial);
 		xdg_popup_add_listener(xdg_popup, &xdg_popup_listener, popup);
 		xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, NULL);
 		wl_surface_commit(surface);
@@ -824,7 +873,7 @@ static void open_popup_id(struct swaybar_sni *sni, int id) {
 }
 
 void open_popup(struct swaybar_sni *sni, struct swaybar_output *output,
-		struct wl_seat *seat, uint32_t serial, int x, int y) {
+		struct swaybar_seat *seat, uint32_t serial, int x, int y) {
 	sway_log(SWAY_DEBUG, "%s%s opening popup", sni->service, sni->menu_path);
 
 	struct swaybar_tray *tray = sni->tray;
@@ -903,9 +952,8 @@ bool popup_pointer_leave(void *data, struct wl_pointer *wl_pointer,
 	return false;
 }
 
-bool popup_pointer_motion(void *data, struct wl_pointer *wl_pointer,
+bool popup_pointer_motion(struct swaybar_seat *seat, struct wl_pointer *wl_pointer,
 		uint32_t time_, wl_fixed_t surface_x, wl_fixed_t surface_y) {
-	struct swaybar_seat *seat = data;
 	struct swaybar_tray *tray = seat->bar->tray;
 	if (!(tray && tray->popup && tray->popup->pointer_focus)) {
 		return false;
@@ -919,12 +967,12 @@ bool popup_pointer_motion(void *data, struct wl_pointer *wl_pointer,
 	int step = 1;
 	if (popup->last_hover) { // calculate whether pointer went up or down
 		hotspot_ptr = popup->last_hover;
-		step = y < (*hotspot_ptr)->y ? -1 : 1;
+		step = y < (*hotspot_ptr)->y_old ? -1 : 1;
 		hotspot_ptr += step;
 	}
 
 	for (; hotspot_ptr >= hotspots_start; hotspot_ptr += step) {
-		if ((step == 1) == (y < (*hotspot_ptr)->y)) {
+		if ((step == 1) == (y < (*hotspot_ptr)->y_old)) {
 			break;
 		}
 	}
@@ -952,46 +1000,57 @@ bool popup_pointer_button(void *data, struct wl_pointer *wl_pointer,
 	}
 
 	struct swaybar_popup *popup = tray->popup;
-	float y = seat->pointer.y * popup->output->scale;
+	/* float y = seat->pointer.y * popup->output->scale; */
 	if (state != WL_POINTER_BUTTON_STATE_PRESSED) {
 		// intentionally left blank
 	} else if (!popup->pointer_focus) {
 		close_popup(popup);
 	} else if (button == BTN_LEFT) {
 		list_t *hotspots = popup->pointer_focus->hotspots;
-		for (int i = 0; i < hotspots->length; ++i) {
-			struct swaybar_popup_hotspot *hotspot = hotspots->items[i];
-			if (y < hotspot->y) {
-				struct swaybar_menu_item *item = hotspot->item;
-
-				if (!item->enabled || item->is_separator) {
-					break;
-				}
-
-				struct swaybar_sni *sni = popup->sni;
-				if (item->children) {
-					destroy_popup_surface(popup->pointer_focus->child);
-					popup->pointer_focus->child = NULL;
-					popup->serial = serial;
-					popup->x = 0;
-					if (tray->bar->config->position & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) { // top bar
-						popup->y = i ? ((struct swaybar_popup_hotspot *)hotspots->items[i-1])->y : 0;
-					} else {
-						popup->y = hotspot->y;
-					}
-					popup->y /= popup->output->scale;
-					open_popup_id(sni, item->id);
-				} else {
-					sd_bus_call_method_async(tray->bus, NULL, sni->service,
-							sni->menu_path, menu_interface, "Event", NULL, NULL,
-							"isvu", item->id, "clicked", "y", 0, time(NULL));
-					sway_log(SWAY_DEBUG, "%s%s popup clicked id %d",
-							sni->service, sni->menu_path, item->id);
-					close_popup(popup);
-				}
-				break;
-			}
+		struct swaybar_popup_hotspot * active_hotspot = find_hotspot(hotspots,
+															  seat->pointer.x * popup->output->scale,
+															  seat->pointer.y * popup->output->scale);
+		if (!active_hotspot) {
+			return popup->pointer_focus;
 		}
+		struct swaybar_menu_item *item = active_hotspot->item;
+		sway_log(SWAY_INFO, "Pressed on %s", item->label);
+		if (!item->enabled || item->is_separator) {
+			return popup->pointer_focus;
+		}
+		/* for (int i = 0; i < hotspots->length; ++i) { */
+			/* struct swaybar_popup_hotspot *hotspot = hotspots->items[i]; */
+			/* if (y < hotspot->y_old) { */
+			/* 	struct swaybar_menu_item *item = hotspot->item; */
+
+			/* 	if (!item->enabled || item->is_separator) { */
+			/* 		break; */
+			/* 	} */
+
+		struct swaybar_sni *sni = popup->sni;
+		if (item->children) {
+			destroy_popup_surface(popup->pointer_focus->child);
+			popup->pointer_focus->child = NULL;
+			popup->serial = serial;
+			popup->x = 0;
+			if (tray->bar->config->position & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) { // top bar
+				popup->y = active_hotspot->y;
+			} else {
+				popup->y = active_hotspot->y + active_hotspot->height;
+			}
+			popup->y /= popup->output->scale;
+			open_popup_id(sni, item->id);
+		} else {
+			sd_bus_call_method_async(tray->bus, NULL, sni->service,
+									 sni->menu_path, menu_interface, "Event", NULL, NULL,
+									 "isvu", item->id, "clicked", "y", 0, time(NULL));
+			sway_log(SWAY_DEBUG, "%s%s popup clicked id %d",
+					 sni->service, sni->menu_path, item->id);
+			close_popup(popup);
+				}
+			/* 	break; */
+			/* } */
+		/* } */
 	}
 	return popup->pointer_focus;
 }

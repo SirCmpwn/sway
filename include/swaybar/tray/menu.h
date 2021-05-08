@@ -45,7 +45,8 @@ void destroy_menu(struct swaybar_menu_item *menu);
 /* POPUP */
 
 struct swaybar_popup_hotspot {
-	int y;
+	int y_old;
+	int x, y, width, height;
 	struct swaybar_menu_item *item;
 };
 
@@ -65,7 +66,7 @@ struct swaybar_popup {
 	struct swaybar_tray *tray;
 	struct swaybar_sni *sni;
 	struct swaybar_output *output;
-	struct wl_seat *seat;
+	struct swaybar_seat *seat;
 	struct xdg_wm_base *wm_base;
 
 	struct swaybar_popup_surface *popup_surface;
@@ -78,7 +79,7 @@ struct swaybar_popup {
 };
 
 void open_popup(struct swaybar_sni *sni, struct swaybar_output *output,
-		struct wl_seat *seat, uint32_t serial, int x, int y);
+		struct swaybar_seat *seat, uint32_t serial, int x, int y);
 void destroy_popup(struct swaybar_popup *popup);
 
 
@@ -92,7 +93,7 @@ bool popup_pointer_enter(void *data, struct wl_pointer *wl_pointer,
 		wl_fixed_t surface_x, wl_fixed_t surface_y);
 bool popup_pointer_leave(void *data, struct wl_pointer *wl_pointer,
 		uint32_t serial, struct wl_surface *surface);
-bool popup_pointer_motion(void *data, struct wl_pointer *wl_pointer,
+bool popup_pointer_motion(struct swaybar_seat *seat, struct wl_pointer *wl_pointer,
 		uint32_t time, wl_fixed_t surface_x, wl_fixed_t surface_y);
 bool popup_pointer_button(void *data, struct wl_pointer *wl_pointer,
 		uint32_t serial, uint32_t time, uint32_t button, uint32_t state);
