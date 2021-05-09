@@ -23,6 +23,7 @@
 
 /* MENU */
 
+static void show_popup_id(struct swaybar_sni *sni, int id);
 static void close_popup(struct swaybar_popup *popup);
 static void open_popup_id(struct swaybar_sni *sni, int id);
 
@@ -186,8 +187,8 @@ static int update_item_properties(struct swaybar_menu_item *item,
 	return sd_bus_message_exit_container(msg);
 }
 
-static int get_layout_callback(sd_bus_message *msg, void *data,
-		sd_bus_error *error) {
+static int
+get_layout_callback(sd_bus_message *msg, void *data, sd_bus_error *error) {
 	struct swaybar_sni_slot *slot = data;
 	struct swaybar_sni *sni = slot->sni;
 	wl_list_remove(&slot->link);
@@ -229,8 +230,20 @@ static int get_layout_callback(sd_bus_message *msg, void *data,
 		} else if (sni->menu) {
 			struct swaybar_menu_item **menu_ptr =
 					menu_find_item(&sni->menu, item->id);
-			// TODO: Does it need to be destroyed? Could just update the layout
-			destroy_menu(*menu_ptr);
+			{
+				// Destroy menu
+				struct swaybar_menu_item *menu = *menu_ptr;
+				free(menu->label);
+				free(menu->icon_name);
+				cairo_surface_destroy(menu->icon_data);
+				if (menu->children) {
+					for (int i = 0; i < menu->children->length; ++i) {
+						destroy_menu(menu->children->items[i]);
+					}
+					list_free(menu->children);
+				}
+				free(menu);
+			}
 			*menu_ptr = item;
 		} else {
 			sni->menu = item;
@@ -257,7 +270,7 @@ static int get_layout_callback(sd_bus_message *msg, void *data,
 		sni->menu = NULL;
 	} else if (popup->sni == sni) {
 		if (popup->popup_surface) {
-			close_popup(popup); // TODO enhancement: redraw instead of closing
+			show_popup_id(sni, 0);
 		} else {
 			open_popup_id(sni, 0);
 		}
@@ -284,8 +297,6 @@ static void update_menu(struct swaybar_sni *sni, int id) {
 static int handle_layout_updated(sd_bus_message *msg, void *data,
 		sd_bus_error *error) {
 	struct swaybar_sni *sni = data;
-	sway_log(SWAY_DEBUG, "%s%s layout updated", sni->service, sni->menu_path);
-
 	int id;
 	sd_bus_message_read(msg, "ui", NULL, &id);
 	update_menu(sni, id);
@@ -791,6 +802,12 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 	struct swaybar_popup *popup = tray->popup;
 	struct swaybar_output *output = popup->output;
 
+	if (output->frame_scheduled) {
+		return;
+	}
+
+	output->frame_scheduled = true;
+
 	struct swaybar *bar = tray->bar;
 	struct swaybar_config *config = bar->config;
 
@@ -908,37 +925,14 @@ static void show_popup_id(struct swaybar_sni *sni, int id) {
 	struct swaybar_menu_item *root = *menu_find_item(&sni->menu, id);
 	popup_surface->item = root;
 	popup_surface->hotspots = hotspots;
-	/* popup_surface->xdg_popup = xdg_popup; */
-	/* popup_surface->xdg_surface = xdg_surface; */
-	/* popup_surface->surface = surface; */
-
-	sd_bus_call_method_async(sni->tray->bus,
-							 NULL,
-							 sni->service,
-							 sni->menu_path,
-							 menu_interface,
-							 "Event",
-							 NULL,
-							 NULL,
-							 "isvu",
-							 id,
-							 "opened",
-							 "y",
-							 0,
-							 time(NULL));
-	sway_log(SWAY_DEBUG,
-			 "%s%s opened id %d",
-			 sni->service,
-			 sni->menu_path,
-			 id);
 
 cleanup:
 	cairo_surface_destroy(recorder);
 	cairo_destroy(cairo);
+	output->frame_scheduled = false;
 	return;
 error:
 	list_free_items_and_destroy(hotspots);
-	free(popup_surface);
 	goto cleanup;
 }
 
@@ -956,6 +950,26 @@ static int about_to_show_callback(sd_bus_message *msg, void *data,
 		update_menu(sni, id);
 	} else {
 		show_popup_id(sni, id);
+
+		sd_bus_call_method_async(sni->tray->bus,
+								 NULL,
+								 sni->service,
+								 sni->menu_path,
+								 menu_interface,
+								 "Event",
+								 NULL,
+								 NULL,
+								 "isvu",
+								 id,
+								 "opened",
+								 "y",
+								 0,
+								 time(NULL));
+		sway_log(SWAY_DEBUG,
+				 "%s%s opened id %d",
+				 sni->service,
+				 sni->menu_path,
+				 id);
 	}
 	return 0;
 }
@@ -1063,35 +1077,43 @@ bool popup_pointer_motion(struct swaybar_seat *seat, struct wl_pointer *wl_point
 	if (!(tray && tray->popup && tray->popup->pointer_focus)) {
 		return false;
 	}
-
 	struct swaybar_popup *popup = tray->popup;
-	double y = seat->pointer.y * popup->output->scale;
-	struct swaybar_popup_hotspot **hotspots_start =
-		(struct swaybar_popup_hotspot **)popup->pointer_focus->hotspots->items;
-	struct swaybar_popup_hotspot **hotspot_ptr = hotspots_start;
-	int step = 1;
-	if (popup->last_hover) { // calculate whether pointer went up or down
-		hotspot_ptr = popup->last_hover;
-		step = y < (*hotspot_ptr)->y_old ? -1 : 1;
-		hotspot_ptr += step;
-	}
+	/* double y = seat->pointer.y * popup->output->scale; */
+	/* struct swaybar_popup_hotspot **hotspots_start = */
+	/* 	(struct swaybar_popup_hotspot **)popup->pointer_focus->hotspots->items; */
+	/* struct swaybar_popup_hotspot **hotspot_ptr = hotspots_start; */
+	/* int step = 1; */
+	/* if (popup->last_hover) { // calculate whether pointer went up or down */
+	/* 	hotspot_ptr = popup->last_hover; */
+	/* 	step = y < (*hotspot_ptr)->y_old ? -1 : 1; */
+	/* 	hotspot_ptr += step; */
+	/* } */
 
-	for (; hotspot_ptr >= hotspots_start; hotspot_ptr += step) {
-		if ((step == 1) == (y < (*hotspot_ptr)->y_old)) {
-			break;
-		}
-	}
+	/* for (; hotspot_ptr >= hotspots_start; hotspot_ptr += step) { */
+	/* 	if ((step == 1) == (y < (*hotspot_ptr)->y_old)) { */
+	/* 		break; */
+	/* 	} */
+	/* } */
 
-	hotspot_ptr += step == -1;
-	struct swaybar_menu_item *item = (*hotspot_ptr)->item;
-	if (hotspot_ptr != popup->last_hover && item->enabled && !item->is_separator) {
-		struct swaybar_sni *sni = item->sni;
-		sd_bus_call_method_async(tray->bus, NULL, sni->service,
-				sni->menu_path, menu_interface, "Event", NULL, NULL, "isvu",
-				item->id, "hovered", "y", 0, time(NULL));
-		sway_log(SWAY_DEBUG, "%s%s hovered id %d", sni->service, sni->menu_path, item->id);
-	}
-	popup->last_hover = hotspot_ptr;
+	/* hotspot_ptr += step == -1; */
+	/* struct swaybar_menu_item *item = (*hotspot_ptr)->item; */
+	/* if (hotspot_ptr != popup->last_hover && item->enabled && !item->is_separator) { */
+	/* 	struct swaybar_sni *sni = item->sni; */
+	/* 	sd_bus_call_method_async(tray->bus, NULL, sni->service, */
+	/* 			sni->menu_path, menu_interface, "Event", NULL, NULL, "isvu", */
+	/* 			item->id, "hovered", "y", 0, time(NULL)); */
+	/* 	sway_log(SWAY_DEBUG, "%s%s hovered id %d", sni->service, sni->menu_path, item->id); */
+	/* } */
+	/* popup->last_hover = hotspot_ptr; */
+
+	/* sway_assert(popup, ""); */
+	/* sway_assert(popup->sni, ""); */
+	/* sway_assert(popup->pointer_focus, ""); */
+	/* sway_assert(popup->pointer_focus->item, ""); */
+	/* sway_assert(popup->pointer_focus->item->id, ""); */
+	/* show_popup_id(popup->sni, popup->pointer_focus->item->id); */
+
+	show_popup_id(popup->sni, 0);
 
 	return true;
 }
