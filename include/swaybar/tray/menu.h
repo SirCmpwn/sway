@@ -60,6 +60,8 @@ struct swaybar_popup_surface {
 	struct wl_surface *surface;
 	struct pool_buffer buffers[2];
 	struct pool_buffer *current_buffer;
+
+	int x, y, width, height;
 };
 
 struct swaybar_popup {
