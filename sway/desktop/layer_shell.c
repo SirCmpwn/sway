@@ -297,13 +297,16 @@ static void handle_surface_commit(struct wl_listener *listener, void *data) {
 		return;
 	}
 
-	struct sway_output *output = wlr_output->data;
-	struct wlr_box old_geo = layer->geo;
-	arrange_layers(output);
+	bool geo_changed = false, layer_changed = false;
+	if (layer_surface->current.committed != 0) {
+		struct sway_output *output = wlr_output->data;
+		struct wlr_box old_geo = layer->geo;
+		arrange_layers(output);
 
-	bool geo_changed =
-		memcmp(&old_geo, &layer->geo, sizeof(struct wlr_box)) != 0;
-	bool layer_changed = layer->layer != layer_surface->current.layer;
+		geo_changed = memcmp(&old_geo, &layer->geo, sizeof(struct wlr_box)) != 0;
+		layer_changed = layer->layer != layer_surface->current.layer;
+	}
+
 	if (layer_changed) {
 		wl_list_remove(&layer->link);
 		wl_list_insert(&output->layers[layer_surface->current.layer],
