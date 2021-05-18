@@ -63,7 +63,11 @@ static void handle_drm_lease_requested(
 	/* We only offer non-desktop outputs, but in the future we might want to do
 	 * more logic here. */
 	struct wlr_drm_lease_request_v1 *req = data;
-	wlr_drm_lease_device_v1_grant_lease_request(req->device, req);
+	struct wlr_drm_lease_v1 *lease =
+		wlr_drm_lease_device_v1_grant_lease_request(req->device, req);
+	if (!lease) {
+		wlr_drm_lease_device_v1_reject_lease_request(req->device, req);
+	}
 }
 
 bool server_init(struct sway_server *server) {
