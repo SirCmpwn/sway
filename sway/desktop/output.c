@@ -843,9 +843,9 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 
 	if (wlr_output->non_desktop) {
 		sway_log(SWAY_DEBUG, "Not configuring non-desktop output");
-		if (server->drm_lease_device && wlr_output_is_drm(wlr_output)) {
-			wlr_drm_lease_device_v1_offer_output(
-					server->drm_lease_device, wlr_output);
+		if (server->drm_lease_manager) {
+			wlr_drm_lease_v1_manager_offer_output(server->drm_lease_manager,
+					wlr_output);
 		}
 		return;
 	}
