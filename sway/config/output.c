@@ -620,7 +620,7 @@ void apply_output_config_to_outputs(struct output_config *oc) {
 	wl_list_for_each_safe(sway_output, tmp, &root->all_outputs, link) {
 		char *name = sway_output->wlr_output->name;
 		output_get_identifier(id, sizeof(id), sway_output);
-		if (wildcard || !strcmp(name, oc->name) || !strcmp(id, oc->name)) {
+		if (wildcard || !output_name_cmp(oc, name) || !output_name_cmp(oc, id)) {
 			struct output_config *current = get_output_config(id, sway_output);
 			if (!current) {
 				// No stored output config matched, apply oc directly

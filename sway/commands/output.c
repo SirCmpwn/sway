@@ -2,6 +2,7 @@
 #include "sway/commands.h"
 #include "sway/config.h"
 #include "sway/output.h"
+#include "stringop.h"
 #include "list.h"
 #include "log.h"
 
@@ -37,6 +38,13 @@ struct cmd_results *cmd_output(int argc, char **argv) {
 	if (strcasecmp(argv[0], root->noop_output->wlr_output->name) == 0) {
 		return cmd_results_new(CMD_FAILURE,
 				"Refusing to configure the no op output");
+	}
+
+	// Commands from config_command() & execute_command() don't handle quotes the same way
+	for (int i = 0; i < argc; ++i) {
+		if (*argv[i] == '\"' || *argv[i] == '\'') {
+			strip_quotes(argv[i]);
+		}
 	}
 
 	struct output_config *output = NULL;

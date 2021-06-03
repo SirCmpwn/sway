@@ -51,6 +51,13 @@ struct cmd_results *cmd_input(int argc, char **argv) {
 		return error;
 	}
 
+	// Commands from config_command() & execute_command() don't handle quotes the same way
+	for (int i = 0; i < argc; ++i) {
+		if (*argv[i] == '\"' || *argv[i] == '\'') {
+			strip_quotes(argv[i]);
+		}
+	}
+
 	sway_log(SWAY_DEBUG, "entering input block: %s", argv[0]);
 
 	config->handler_context.input_config = new_input_config(argv[0]);
