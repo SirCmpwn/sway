@@ -38,6 +38,8 @@ struct sway_server {
 	struct wlr_compositor *compositor;
 	struct wl_listener compositor_new_surface;
 
+	struct wlr_linux_dmabuf_v1 *linux_dmabuf_v1;
+
 	struct wlr_data_device_manager *data_device_manager;
 
 	struct sway_input_manager *input;

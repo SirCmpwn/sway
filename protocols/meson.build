@@ -15,6 +15,7 @@ protocols = [
 	[wl_protocol_dir, 'unstable/xdg-output/xdg-output-unstable-v1.xml'],
 	[wl_protocol_dir, 'unstable/pointer-constraints/pointer-constraints-unstable-v1.xml'],
 	[wl_protocol_dir, 'unstable/tablet/tablet-unstable-v2.xml'],
+	[wl_protocol_dir, 'unstable/linux-dmabuf/linux-dmabuf-unstable-v1.xml'],
 	['wlr-layer-shell-unstable-v1.xml'],
 	['idle.xml'],
 	['wlr-input-inhibitor-unstable-v1.xml'],
