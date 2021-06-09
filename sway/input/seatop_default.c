@@ -12,6 +12,7 @@
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
 #include "log.h"
+#include "util.h"
 #if HAVE_XWAYLAND
 #include "sway/xwayland.h"
 #endif
@@ -709,8 +710,17 @@ static void handle_pointer_axis(struct sway_seat *seat,
 			struct sway_node *active =
 				seat_get_active_tiling_child(seat, tabcontainer);
 			list_t *siblings = container_get_siblings(cont);
+			int delta_discrete = event->delta_discrete;
+			if (delta_discrete == 0) {
+				scroll_distance_add(event->delta);
+				float dist = scroll_distance_get();
+				delta_discrete = round(dist / 10.);
+				if (abs(delta_discrete) > 0) {
+					scroll_distance_reset();
+				}
+			}
 			int desired = list_find(siblings, active->sway_container) +
-				round(scroll_factor * event->delta_discrete);
+				round(scroll_factor * delta_discrete);
 			if (desired < 0) {
 				desired = 0;
 			} else if (desired >= siblings->length) {

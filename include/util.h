@@ -67,4 +67,8 @@ const char *sway_wl_output_subpixel_to_string(enum wl_output_subpixel subpixel);
 
 bool sway_set_cloexec(int fd, bool cloexec);
 
+void scroll_distance_add(float delta);
+void scroll_distance_reset();
+float scroll_distance_get();
+
 #endif

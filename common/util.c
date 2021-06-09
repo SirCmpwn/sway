@@ -142,3 +142,16 @@ bool sway_set_cloexec(int fd, bool cloexec) {
 	}
 	return true;
 }
+
+float _distance_scrolled = 0;
+void scroll_distance_add(float delta) {
+	_distance_scrolled += delta;
+}
+
+void scroll_distance_reset() {
+	_distance_scrolled = 0;
+}
+
+float scroll_distance_get() {
+	return _distance_scrolled;
+}
