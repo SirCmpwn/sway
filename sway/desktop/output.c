@@ -765,6 +765,7 @@ static void handle_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&output->commit.link);
 	wl_list_remove(&output->mode.link);
 	wl_list_remove(&output->present.link);
+	wl_list_remove(&output->request_state.link);
 
 	transaction_commit_dirty();
 
@@ -834,6 +835,14 @@ static void handle_present(struct wl_listener *listener, void *data) {
 	output->refresh_nsec = output_event->refresh;
 }
 
+static void handle_request_state(struct wl_listener *listener, void *data) {
+	struct sway_output *output =
+		wl_container_of(listener, output, request_state);
+	const struct wlr_output_event_request_state *event = data;
+	wlr_output_queue_state(output->wlr_output, &event->state);
+	wlr_output_commit(output->wlr_output);
+}
+
 void handle_new_output(struct wl_listener *listener, void *data) {
 	struct sway_server *server = wl_container_of(listener, server, new_output);
 	struct wlr_output *wlr_output = data;
@@ -854,6 +863,8 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	output->mode.notify = handle_mode;
 	wl_signal_add(&wlr_output->events.present, &output->present);
 	output->present.notify = handle_present;
+	wl_signal_add(&wlr_output->events.request_state, &output->request_state);
+	output->request_state.notify = handle_request_state;
 	wl_signal_add(&output->damage->events.frame, &output->damage_frame);
 	output->damage_frame.notify = damage_handle_frame;
 	wl_signal_add(&output->damage->events.destroy, &output->damage_destroy);

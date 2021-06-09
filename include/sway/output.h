@@ -45,6 +45,7 @@ struct sway_output {
 	struct wl_listener commit;
 	struct wl_listener mode;
 	struct wl_listener present;
+	struct wl_listener request_state;
 	struct wl_listener damage_destroy;
 	struct wl_listener damage_frame;
 
