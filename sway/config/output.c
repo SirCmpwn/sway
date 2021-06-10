@@ -334,6 +334,18 @@ static int compute_default_scale(struct wlr_output *output) {
 	return 2;
 }
 
+static float get_effective_scale(struct output_config *oc,
+		struct wlr_output *wlr_output) {
+	float scale;
+	if (oc && oc->scale > 0) {
+		scale = oc->scale;
+	} else {
+		scale = compute_default_scale(wlr_output);
+		sway_log(SWAY_DEBUG, "Auto-detected output scale: %f", scale);
+	}
+	return scale;
+}
+
 static void queue_output_config(struct output_config *oc,
 		struct sway_output *output) {
 	if (output == root->noop_output) {
@@ -374,13 +386,7 @@ static void queue_output_config(struct output_config *oc,
 
 	// Apply the scale last before the commit, because the scale auto-detection
 	// reads the pending output size
-	float scale;
-	if (oc && oc->scale > 0) {
-		scale = oc->scale;
-	} else {
-		scale = compute_default_scale(wlr_output);
-		sway_log(SWAY_DEBUG, "Auto-detected output scale: %f", scale);
-	}
+	float scale = get_effective_scale(oc, output->wlr_output);
 	if (scale != wlr_output->scale) {
 		sway_log(SWAY_DEBUG, "Set %s scale to %f", wlr_output->name, scale);
 		wlr_output_set_scale(wlr_output, scale);
@@ -454,9 +460,24 @@ bool apply_output_config(struct output_config *oc, struct sway_output *output) {
 	}
 
 	// Find position for it
-	if (oc && (oc->x != -1 || oc->y != -1)) {
-		sway_log(SWAY_DEBUG, "Set %s position to %d, %d", oc->name, oc->x, oc->y);
-		wlr_output_layout_add(root->output_layout, wlr_output, oc->x, oc->y);
+	int32_t effective_x = -1, effective_y = -1;
+	float effective_scale = get_effective_scale(oc, output->wlr_output);
+	if (output->wlr_output->suggested_x != -1) {
+		effective_x = output->wlr_output->suggested_x / effective_scale;
+	}
+	if (output->wlr_output->suggested_y != -1) {
+		effective_y = output->wlr_output->suggested_y / effective_scale;
+	}
+	if (oc && oc->x != -1) {
+		effective_x = oc->x;
+	}
+	if (oc && oc->y != -1) {
+		effective_y = oc->y;
+	}
+
+	if (effective_x != -1 || effective_y != -1) {
+		sway_log(SWAY_DEBUG, "Set %s position to %d, %d", oc ? oc->name : wlr_output->name, effective_x, effective_y);
+		wlr_output_layout_add(root->output_layout, wlr_output, effective_x, effective_y);
 	} else {
 		wlr_output_layout_add_auto(root->output_layout, wlr_output);
 	}

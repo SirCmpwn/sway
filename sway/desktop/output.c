@@ -796,6 +796,28 @@ static void handle_mode(struct wl_listener *listener, void *data) {
 	update_output_manager_config(output->server);
 }
 
+static void handle_available_modes(struct wl_listener *listener, void *data) {
+	struct sway_output *output = wl_container_of(listener, output, available_modes);
+	struct output_config *oc = find_output_config(output);
+	apply_output_config(oc, output);
+	free_output_config(oc);
+
+	transaction_commit_dirty();
+
+	update_output_manager_config(output->server);
+}
+
+static void handle_suggested_position(struct wl_listener *listener, void *data) {
+	struct sway_output *output = wl_container_of(listener, output, suggested_position);
+	struct output_config *oc = find_output_config(output);
+	apply_output_config(oc, output);
+	free_output_config(oc);
+
+	transaction_commit_dirty();
+
+	update_output_manager_config(output->server);
+}
+
 static void update_textures(struct sway_container *con, void *data) {
 	container_update_title_textures(con);
 	container_update_marks_textures(con);
@@ -852,6 +874,10 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	output->commit.notify = handle_commit;
 	wl_signal_add(&wlr_output->events.mode, &output->mode);
 	output->mode.notify = handle_mode;
+	wl_signal_add(&wlr_output->events.available_modes, &output->available_modes);
+	output->available_modes.notify = handle_available_modes;
+	wl_signal_add(&wlr_output->events.suggested_position, &output->suggested_position);
+	output->suggested_position.notify = handle_suggested_position;
 	wl_signal_add(&wlr_output->events.present, &output->present);
 	output->present.notify = handle_present;
 	wl_signal_add(&output->damage->events.frame, &output->damage_frame);
