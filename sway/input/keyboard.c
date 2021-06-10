@@ -15,6 +15,7 @@
 #include "sway/input/cursor.h"
 #include "sway/ipc-server.h"
 #include "log.h"
+#include "meta-keymap-utils.h"
 
 static struct modifier_key {
 	char *name;
@@ -761,7 +762,7 @@ static void handle_xkb_context_log(struct xkb_context *context,
 
 struct xkb_keymap *sway_keyboard_compile_keymap(struct input_config *ic,
 		char **error) {
-	struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+	struct xkb_context *context = meta_create_xkb_context();
 	if (!sway_assert(context, "cannot create XKB context")) {
 		return NULL;
 	}

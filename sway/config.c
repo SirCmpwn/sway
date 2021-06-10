@@ -31,13 +31,14 @@
 #include "stringop.h"
 #include "list.h"
 #include "log.h"
+#include "meta-keymap-utils.h"
 #include "util.h"
 
 struct sway_config *config = NULL;
 
 static struct xkb_state *keysym_translation_state_create(
 		struct xkb_rule_names rules) {
-	struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+	struct xkb_context *context = meta_create_xkb_context();
 	struct xkb_keymap *xkb_keymap = xkb_keymap_new_from_names(
 		context,
 		&rules,
