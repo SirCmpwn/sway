@@ -204,8 +204,8 @@ static uint32_t render_status_block(struct render_context *ctx,
 				output->scale, block->markup, "%s", block->min_width_str);
 		block->min_width = w;
 	}
-	if (width < block->min_width) {
-		width = block->min_width;
+	if (width < block->min_width * output->scale) {
+		width = block->min_width * output->scale;
 	}
 
 	double block_width = width;
@@ -366,8 +366,8 @@ static void predict_status_block_pos(cairo_t *cairo,
 				output->scale, block->markup, "%s", block->min_width_str);
 		block->min_width = w;
 	}
-	if (width < block->min_width) {
-		width = block->min_width;
+	if (width < block->min_width * output->scale) {
+		width = block->min_width * output->scale;
 	}
 
 	uint32_t ideal_height = text_height + ws_vertical_padding * 2;
