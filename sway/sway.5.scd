@@ -649,6 +649,10 @@ The default colors are:
 	should be greater than titlebar_border_thickness. If _vertical_ value is
 	not specified it is set to the _horizontal_ value.
 
+*titlebar_v_height* <height>
+	Height of the titlebar binded to _height_ in pixels. _height_ of -1 turns
+	off binding.
+
 *for_window* <criteria> <command>
 	Whenever a window that matches _criteria_ appears, run list of commands.
 	See *CRITERIA* for more details.

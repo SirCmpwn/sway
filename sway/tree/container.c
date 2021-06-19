@@ -577,16 +577,22 @@ void container_update_title_textures(struct sway_container *container) {
 }
 
 void container_calculate_title_height(struct sway_container *container) {
+        int height;
+        int baseline;
+
 	if (!container->formatted_title) {
 		container->title_height = 0;
 		return;
 	}
-	cairo_t *cairo = cairo_create(NULL);
-	int height;
-	int baseline;
-	get_text_size(cairo, config->font, NULL, &height, &baseline, 1,
-			config->pango_markup, "%s", container->formatted_title);
-	cairo_destroy(cairo);
+	if (config->titlebar_v_height >= 0) {
+		height   = config->titlebar_v_height;
+		baseline = round(height * 0.77);
+	} else {
+		cairo_t *cairo = cairo_create(NULL);
+		get_text_size(cairo, config->font, NULL, &height, &baseline, 1,
+				config->pango_markup, "%s", container->formatted_title);
+		cairo_destroy(cairo);
+	}
 	container->title_height = height;
 	container->title_baseline = baseline;
 }

@@ -245,6 +245,7 @@ static void config_defaults(struct sway_config *config) {
 	config->titlebar_border_thickness = 1;
 	config->titlebar_h_padding = 5;
 	config->titlebar_v_padding = 4;
+	config->titlebar_v_height = -1;
 
 	// floating view
 	config->floating_maximum_width = 0;
