@@ -15,6 +15,7 @@
 
 struct swaybar;
 struct swaybar_output;
+struct swaybar_seat;
 
 struct swaybar_pointer {
 	struct wl_pointer *pointer;
@@ -48,8 +49,8 @@ struct swaybar_hotspot {
 	struct wl_list link; // swaybar_output::hotspots
 	int x, y, width, height;
 	enum hotspot_event_handling (*callback)(struct swaybar_output *output,
-		struct swaybar_hotspot *hotspot, double x, double y, uint32_t button,
-		void *data);
+		struct swaybar_hotspot *hotspot, struct swaybar_seat *seat, uint32_t serial,
+		double x, double y, uint32_t button, void *data);
 	void (*destroy)(void *data);
 	void *data;
 };

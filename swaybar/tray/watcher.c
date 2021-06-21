@@ -39,6 +39,9 @@ static int handle_lost_service(sd_bus_message *msg,
 				sd_bus_emit_signal(watcher->bus, obj_path, watcher->interface,
 						"StatusNotifierItemUnregistered", "s", id);
 				free(id);
+
+				sd_bus_emit_properties_changed(watcher->bus, obj_path,
+						watcher->interface, "RegisteredStatusNotifierItems", NULL);
 				if (using_standard_protocol(watcher)) {
 					break;
 				}
@@ -50,6 +53,11 @@ static int handle_lost_service(sd_bus_message *msg,
 			sway_log(SWAY_DEBUG, "Unregistering Status Notifier Host '%s'", service);
 			free(watcher->hosts->items[idx]);
 			list_del(watcher->hosts, idx);
+
+			if (watcher->hosts->length == 0) {
+				sd_bus_emit_properties_changed(watcher->bus, obj_path,
+						watcher->interface, "IsStatusNotifierHostRegistered", NULL);
+			}
 		}
 	}
 
@@ -86,6 +94,9 @@ static int register_sni(sd_bus_message *msg, void *data, sd_bus_error *error) {
 		list_add(watcher->items, id);
 		sd_bus_emit_signal(watcher->bus, obj_path, watcher->interface,
 				"StatusNotifierItemRegistered", "s", id);
+
+		sd_bus_emit_properties_changed(watcher->bus, obj_path,
+				watcher->interface, "RegisteredStatusNotifierItems", NULL);
 	} else {
 		sway_log(SWAY_DEBUG, "Status Notifier Item '%s' already registered", id);
 		free(id);
@@ -108,6 +119,11 @@ static int register_host(sd_bus_message *msg, void *data, sd_bus_error *error) {
 		list_add(watcher->hosts, strdup(service));
 		sd_bus_emit_signal(watcher->bus, obj_path, watcher->interface,
 				"StatusNotifierHostRegistered", "s", service);
+
+		if (watcher->hosts->length == 1) {
+			sd_bus_emit_properties_changed(watcher->bus, obj_path,
+					watcher->interface, "IsStatusNotifierHostRegistered", NULL);
+		}
 	} else {
 		sway_log(SWAY_DEBUG, "Status Notifier Host '%s' already registered", service);
 	}
@@ -135,10 +151,10 @@ static int is_host_registered(sd_bus *bus, const char *obj_path,
 
 static const sd_bus_vtable watcher_vtable[] = {
 	SD_BUS_VTABLE_START(0),
-	SD_BUS_METHOD("RegisterStatusNotifierItem", "s", "", register_sni,
-			SD_BUS_VTABLE_UNPRIVILEGED),
-	SD_BUS_METHOD("RegisterStatusNotifierHost", "s", "", register_host,
-			SD_BUS_VTABLE_UNPRIVILEGED),
+	SD_BUS_METHOD_WITH_NAMES("RegisterStatusNotifierItem", "s", SD_BUS_PARAM(service),
+			"", /* void */, register_sni, SD_BUS_VTABLE_UNPRIVILEGED),
+	SD_BUS_METHOD_WITH_NAMES("RegisterStatusNotifierHost", "s", SD_BUS_PARAM(service),
+			"", /* void */, register_host, SD_BUS_VTABLE_UNPRIVILEGED),
 	SD_BUS_PROPERTY("RegisteredStatusNotifierItems", "as", get_registered_snis,
 			0, SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
 	SD_BUS_PROPERTY("IsStatusNotifierHostRegistered", "b", is_host_registered,
@@ -146,15 +162,16 @@ static const sd_bus_vtable watcher_vtable[] = {
 	SD_BUS_PROPERTY("ProtocolVersion", "i", NULL,
 			offsetof(struct swaybar_watcher, version),
 			SD_BUS_VTABLE_PROPERTY_CONST),
-	SD_BUS_SIGNAL("StatusNotifierItemRegistered", "s", 0),
-	SD_BUS_SIGNAL("StatusNotifierItemUnregistered", "s", 0),
+	SD_BUS_SIGNAL_WITH_NAMES("StatusNotifierItemRegistered", "s",
+			SD_BUS_PARAM(service), 0),
+	SD_BUS_SIGNAL_WITH_NAMES("StatusNotifierItemUnregistered", "s",
+			SD_BUS_PARAM(service), 0),
 	SD_BUS_SIGNAL("StatusNotifierHostRegistered", NULL, 0),
 	SD_BUS_VTABLE_END
 };
 
 struct swaybar_watcher *create_watcher(char *protocol, sd_bus *bus) {
-	struct swaybar_watcher *watcher =
-		calloc(1, sizeof(struct swaybar_watcher));
+	struct swaybar_watcher *watcher = calloc(1, sizeof(struct swaybar_watcher));
 	if (!watcher) {
 		return NULL;
 	}
@@ -183,8 +200,8 @@ struct swaybar_watcher *create_watcher(char *protocol, sd_bus *bus) {
 	ret = sd_bus_request_name(bus, watcher->interface, 0);
 	if (ret < 0) {
 		if (-ret == EEXIST) {
-			sway_log(SWAY_DEBUG, "Failed to acquire service name '%s':"
-					"another tray is already running", watcher->interface);
+			sway_log(SWAY_DEBUG, "Failed to acquire service name '%s': "
+					"another watcher is already running", watcher->interface);
 		} else {
 			sway_log(SWAY_ERROR, "Failed to acquire service name '%s': %s",
 					watcher->interface, strerror(-ret));

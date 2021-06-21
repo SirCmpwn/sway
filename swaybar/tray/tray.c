@@ -7,6 +7,7 @@
 #include "swaybar/tray/icon.h"
 #include "swaybar/tray/host.h"
 #include "swaybar/tray/item.h"
+#include "swaybar/tray/menu.h"
 #include "swaybar/tray/tray.h"
 #include "swaybar/tray/watcher.h"
 #include "list.h"
@@ -76,6 +77,7 @@ void destroy_tray(struct swaybar_tray *tray) {
 	if (!tray) {
 		return;
 	}
+	destroy_popup(tray->popup);
 	finish_host(&tray->host_xdg);
 	finish_host(&tray->host_kde);
 	for (int i = 0; i < tray->items->length; ++i) {

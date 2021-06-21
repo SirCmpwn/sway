@@ -7,6 +7,7 @@
 #include "swaybar/tray/tray.h"
 #include "list.h"
 
+struct swaybar_menu;
 struct swaybar_output;
 
 struct swaybar_pixmap {
@@ -21,6 +22,7 @@ struct swaybar_sni_slot {
 	const char *type;
 	void *dest;
 	sd_bus_slot *slot;
+	int menu_id;
 };
 
 struct swaybar_sni {
@@ -35,7 +37,7 @@ struct swaybar_sni {
 	char *watcher_id;
 	char *service;
 	char *path;
-	char *interface;
+	const char *interface;
 
 	char *status;
 	char *icon_name;
@@ -43,10 +45,13 @@ struct swaybar_sni {
 	char *attention_icon_name;
 	list_t *attention_icon_pixmap; // struct swaybar_pixmap *
 	bool item_is_menu;
-	char *menu;
+	char *menu_path;
 	char *icon_theme_path; // non-standard KDE property
 
 	struct wl_list slots; // swaybar_sni_slot::link
+
+	struct swaybar_menu_item *menu;
+	char **menu_icon_theme_paths;
 };
 
 struct swaybar_sni *create_sni(char *id, struct swaybar_tray *tray);

@@ -20,6 +20,7 @@ struct icon_theme_subdir {
 
 struct icon_theme {
 	char *name;
+	int name_locale_level;
 	char *comment;
 	list_t *inherits; // char *
 	list_t *directories; // char *
