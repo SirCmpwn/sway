@@ -137,7 +137,7 @@ elif [ "$SUBJECT" = "window" ] ; then
   fi
   WHAT="Window"
 elif [ "$SUBJECT" = "selection" ] ; then
-  GEOM=$(swaymsg -t get_tree | jq -r '.. | select((.pid? and .visible?) or (.type == "output" and .active)) | .rect | "\(.x),\(.y) \(.width)x\(.height)"' | slurp)
+  GEOM=$(swaymsg -t get_tree | jq -r '.. | select(.pid? and .visible?) | .rect | "\(.x),\(.y) \(.width)x\(.height)"' | slurp -o)
   # Check if user exited slurp without selecting the area
   if [ -z "$GEOM" ]; then
    exit
