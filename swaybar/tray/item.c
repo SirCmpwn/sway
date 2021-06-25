@@ -466,6 +466,11 @@ uint32_t render_sni(cairo_t *cairo, struct swaybar_output *output, double *x,
 		sni->target_size = target_size;
 	}
 
+	// Passive
+	if (sni->status && sni->status[0] == 'P') {
+		return 0;
+	}
+
 	int icon_size;
 	cairo_surface_t *icon;
 	if (sni->icon) {
