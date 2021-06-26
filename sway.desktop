@@ -3,3 +3,4 @@ Name=Sway
 Comment=An i3-compatible Wayland compositor
 Exec=sway
 Type=Application
+Icon=assets/Sway_Logo+Text_Ver3.svg
