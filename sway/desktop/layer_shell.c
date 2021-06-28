@@ -406,6 +406,8 @@ static void subsurface_damage(struct sway_layer_subsurface *subsurface,
 static void subsurface_handle_unmap(struct wl_listener *listener, void *data) {
 	struct sway_layer_subsurface *subsurface =
 			wl_container_of(listener, subsurface, unmap);
+	if (subsurface->layer_surface == NULL)
+		return;
 	subsurface_damage(subsurface, true);
 }
 
@@ -421,6 +423,14 @@ static void subsurface_handle_commit(struct wl_listener *listener, void *data) {
 	subsurface_damage(subsurface, false);
 }
 
+static void subsurface_handle_layer_surface_destroy(
+		struct wl_listener *listener,
+		void *data) {
+	struct sway_layer_subsurface *subsurface =
+			wl_container_of(listener, subsurface, layer_surface_destroy);
+	subsurface->layer_surface = NULL;
+}
+
 static void subsurface_handle_destroy(struct wl_listener *listener,
 		void *data) {
 	struct sway_layer_subsurface *subsurface =
@@ -430,12 +440,14 @@ static void subsurface_handle_destroy(struct wl_listener *listener,
 	wl_list_remove(&subsurface->unmap.link);
 	wl_list_remove(&subsurface->destroy.link);
 	wl_list_remove(&subsurface->commit.link);
+	wl_list_remove(&subsurface->layer_surface_destroy.link);
 	free(subsurface);
 }
 
 static struct sway_layer_subsurface *create_subsurface(
 		struct wlr_subsurface *wlr_subsurface,
 		struct sway_layer_surface *layer_surface) {
+	sway_log(SWAY_DEBUG, "new layer subsurface");
 	struct sway_layer_subsurface *subsurface =
 			calloc(1, sizeof(struct sway_layer_subsurface));
 	if (subsurface == NULL) {
@@ -453,6 +465,11 @@ static struct sway_layer_subsurface *create_subsurface(
 	wl_signal_add(&wlr_subsurface->events.destroy, &subsurface->destroy);
 	subsurface->commit.notify = subsurface_handle_commit;
 	wl_signal_add(&wlr_subsurface->surface->events.commit, &subsurface->commit);
+
+	subsurface->layer_surface_destroy.notify =
+			subsurface_handle_layer_surface_destroy;
+	wl_signal_add(&layer_surface->layer_surface->events.destroy,
+			&subsurface->layer_surface_destroy);
 
 	return subsurface;
 }

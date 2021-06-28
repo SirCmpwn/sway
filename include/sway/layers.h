@@ -48,6 +48,7 @@ struct sway_layer_subsurface {
 	struct wl_listener unmap;
 	struct wl_listener destroy;
 	struct wl_listener commit;
+	struct wl_listener layer_surface_destroy;
 };
 
 struct sway_output;
