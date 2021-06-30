@@ -105,9 +105,6 @@ static void render_texture(struct wlr_output *wlr_output,
 		wlr_backend_get_renderer(wlr_output->backend);
 	struct sway_output *output = wlr_output->data;
 
-	struct wlr_gles2_texture_attribs attribs;
-	wlr_gles2_texture_get_attribs(texture, &attribs);
-
 	pixman_region32_t damage;
 	pixman_region32_init(&damage);
 	pixman_region32_union_rect(&damage, &damage, dst_box->x, dst_box->y,
