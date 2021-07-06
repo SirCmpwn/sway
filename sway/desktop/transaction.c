@@ -232,20 +232,6 @@ static void apply_workspace_state(struct sway_workspace *ws,
 static void apply_container_state(struct sway_container *container,
 		struct sway_container_state *state) {
 	struct sway_view *view = container->view;
-	// Damage the old location
-	desktop_damage_whole_container(container);
-	if (view && !wl_list_empty(&view->saved_buffers)) {
-		struct sway_saved_buffer *saved_buf;
-		wl_list_for_each(saved_buf, &view->saved_buffers, link) {
-			struct wlr_box box = {
-				.x = saved_buf->x - view->saved_geometry.x,
-				.y = saved_buf->y - view->saved_geometry.y,
-				.width = saved_buf->width,
-				.height = saved_buf->height,
-			};
-			desktop_damage_box(&box);
-		}
-	}
 
 	// There are separate children lists for each instruction state, the
 	// container's current state and the container's pending state
@@ -255,12 +241,6 @@ static void apply_container_state(struct sway_container *container,
 	list_free(container->current.children);
 
 	memcpy(&container->current, state, sizeof(struct sway_container_state));
-
-	if (view && !wl_list_empty(&view->saved_buffers)) {
-		if (!container->node.destroying || container->node.ntxnrefs == 1) {
-			view_remove_saved_buffer(view);
-		}
-	}
 
 	// If the view hasn't responded to the configure, center it within
 	// the container. This is important for fullscreen views which
@@ -303,6 +283,7 @@ static void transaction_apply(struct sway_transaction *transaction) {
 	}
 
 	// Apply the instruction state to the node's current state
+	// Applying the last instruction may destroy the transaction
 	for (int i = 0; i < transaction->instructions->length; ++i) {
 		struct sway_transaction_instruction *instruction =
 			transaction->instructions->items[i];
@@ -355,8 +336,29 @@ static int handle_timeout(void *data) {
 	struct sway_transaction *transaction = data;
 	sway_log(SWAY_DEBUG, "Transaction %p timed out (%zi waiting)",
 			transaction, transaction->num_waiting);
-	transaction->num_waiting = 0;
-	transaction_progress();
+
+	struct sway_view **views =
+		calloc(transaction->instructions->length, sizeof(struct sway_view *));
+	size_t views_len = 0;
+
+	for (int i = 0; i < transaction->instructions->length; ++i) {
+		struct sway_transaction_instruction *instruction =
+			transaction->instructions->items[i];
+		struct sway_node *node = instruction->node;
+
+		if (node->type == N_CONTAINER && node->sway_container->view &&
+				node->sway_container->view->surface_locked) {
+			views[views_len] = node->sway_container->view;
+			views_len++;
+		}
+	}
+
+	// This will destroy the transaction
+	for (size_t i = 0; i < views_len; ++i) {
+		view_unlock_pending(views[i]);
+	}
+	free(views);
+
 	return 0;
 }
 
@@ -415,7 +417,7 @@ static void transaction_commit(struct sway_transaction *transaction) {
 				++transaction->num_waiting;
 			}
 
-			// From here on we are rendering a saved buffer of the view, which
+			// From here on we are freezing surface commits for the view, which
 			// means we can send a frame done event to make the client redraw it
 			// as soon as possible. Additionally, this is required if a view is
 			// mapping and its default geometry doesn't intersect an output.
@@ -425,8 +427,8 @@ static void transaction_commit(struct sway_transaction *transaction) {
 					node->sway_container->view->surface, &now);
 		}
 		if (!hidden && node_is_view(node) &&
-				wl_list_empty(&node->sway_container->view->saved_buffers)) {
-			view_save_buffer(node->sway_container->view);
+				!node->sway_container->view->surface_locked) {
+			view_lock_pending(node->sway_container->view);
 			memcpy(&node->sway_container->view->saved_geometry,
 					&node->sway_container->view->geometry,
 					sizeof(struct wlr_box));
@@ -505,6 +507,15 @@ void transaction_notify_view_ready_by_serial(struct sway_view *view,
 		view->container->node.instruction;
 	if (instruction != NULL && instruction->serial == serial) {
 		set_instruction_ready(instruction);
+	}
+}
+
+void transaction_unlock_view_by_serial(struct sway_view *view,
+		uint32_t serial) {
+	struct sway_transaction_instruction *instruction =
+		view->container->node.instruction;
+	if (instruction != NULL && instruction->serial == serial) {
+		view_unlock_pending(view);
 	}
 }
 

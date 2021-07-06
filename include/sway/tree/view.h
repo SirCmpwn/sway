@@ -56,15 +56,6 @@ struct sway_view_impl {
 	void (*destroy)(struct sway_view *view);
 };
 
-struct sway_saved_buffer {
-	struct wlr_client_buffer *buffer;
-	int x, y;
-	int width, height;
-	enum wl_output_transform transform;
-	struct wlr_fbox source_box;
-	struct wl_list link; // sway_view::saved_buffers
-};
-
 struct sway_view {
 	enum sway_view_type type;
 	const struct sway_view_impl *impl;
@@ -87,7 +78,8 @@ struct sway_view {
 	bool allow_request_urgent;
 	struct wl_event_source *urgent_timer;
 
-	struct wl_list saved_buffers; // sway_saved_buffer::link
+	bool surface_locked;
+	uint32_t surface_locked_seq;
 
 	// The geometry for whatever the client is committing, regardless of
 	// transaction state. Updated on every commit.
@@ -129,6 +121,7 @@ struct sway_view {
 struct sway_xdg_shell_view {
 	struct sway_view view;
 
+	struct wl_listener cache;
 	struct wl_listener commit;
 	struct wl_listener request_move;
 	struct wl_listener request_resize;
@@ -357,9 +350,9 @@ void view_set_urgent(struct sway_view *view, bool enable);
 
 bool view_is_urgent(struct sway_view *view);
 
-void view_remove_saved_buffer(struct sway_view *view);
+void view_lock_pending(struct sway_view *view);
 
-void view_save_buffer(struct sway_view *view);
+void view_unlock_pending(struct sway_view *view);
 
 bool view_is_transient_for(struct sway_view *child, struct sway_view *ancestor);
 

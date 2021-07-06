@@ -43,6 +43,11 @@ void transaction_notify_view_ready_by_serial(struct sway_view *view,
 		uint32_t serial);
 
 /**
+ * Unlock the cached surface state held by the transaction system.
+ */
+void transaction_unlock_view_by_serial(struct sway_view *view, uint32_t serial);
+
+/**
  * Notify the transaction system that a view is ready for the new layout, but
  * identifying the instruction by geometry rather than by serial.
  *

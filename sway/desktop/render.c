@@ -289,76 +289,13 @@ static void render_view_popups(struct sway_view *view,
 		render_surface_iterator, &data);
 }
 
-static void render_saved_view(struct sway_view *view,
-		struct sway_output *output, pixman_region32_t *damage, float alpha) {
-	struct wlr_output *wlr_output = output->wlr_output;
-
-	if (wl_list_empty(&view->saved_buffers)) {
-		return;
-	}
-
-	bool floating = container_is_current_floating(view->container);
-
-	struct sway_saved_buffer *saved_buf;
-	wl_list_for_each(saved_buf, &view->saved_buffers, link) {
-		if (!saved_buf->buffer->texture) {
-			continue;
-		}
-
-		struct wlr_box proj_box = {
-			.x = saved_buf->x - view->saved_geometry.x - output->lx,
-			.y = saved_buf->y - view->saved_geometry.y - output->ly,
-			.width = saved_buf->width,
-			.height = saved_buf->height,
-		};
-
-		struct wlr_box output_box = {
-			.width = output->width,
-			.height = output->height,
-		};
-
-		struct wlr_box intersection;
-		bool intersects = wlr_box_intersection(&intersection, &output_box, &proj_box);
-		if (!intersects) {
-			continue;
-		}
-
-		struct wlr_box dst_box = proj_box;
-		scale_box(&proj_box, wlr_output->scale);
-
-		float matrix[9];
-		enum wl_output_transform transform = wlr_output_transform_invert(saved_buf->transform);
-		wlr_matrix_project_box(matrix, &proj_box, transform, 0,
-			wlr_output->transform_matrix);
-
-		if (!floating) {
-			dst_box.width = fmin(dst_box.width,
-					view->container->current.content_width -
-					(saved_buf->x - view->container->current.content_x) + view->saved_geometry.x);
-			dst_box.height = fmin(dst_box.height,
-					view->container->current.content_height -
-					(saved_buf->y - view->container->current.content_y) + view->saved_geometry.y);
-		}
-		scale_box(&dst_box, wlr_output->scale);
-
-		render_texture(wlr_output, damage, saved_buf->buffer->texture,
-			&saved_buf->source_box, &dst_box, matrix, alpha);
-	}
-
-	// FIXME: we should set the surface that this saved buffer originates from
-	// as sampled here.
-	// https://github.com/swaywm/sway/pull/4465#discussion_r321082059
-}
-
 /**
  * Render a view's surface and left/bottom/right borders.
  */
 static void render_view(struct sway_output *output, pixman_region32_t *damage,
 		struct sway_container *con, struct border_colors *colors) {
 	struct sway_view *view = con->view;
-	if (!wl_list_empty(&view->saved_buffers)) {
-		render_saved_view(view, output, damage, view->container->alpha);
-	} else if (view->surface) {
+	if (view->surface) {
 		render_view_toplevels(view, output, damage, view->container->alpha);
 	}
 
@@ -1063,9 +1000,7 @@ void output_render(struct sway_output *output, struct timespec *when,
 		}
 
 		if (fullscreen_con->view) {
-			if (!wl_list_empty(&fullscreen_con->view->saved_buffers)) {
-				render_saved_view(fullscreen_con->view, output, damage, 1.0f);
-			} else if (fullscreen_con->view->surface) {
+			if (fullscreen_con->view->surface) {
 				render_view_toplevels(fullscreen_con->view,
 						output, damage, 1.0f);
 			}

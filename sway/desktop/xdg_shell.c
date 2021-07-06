@@ -279,6 +279,26 @@ static const struct sway_view_impl view_impl = {
 	.destroy = destroy,
 };
 
+static void handle_cache(struct wl_listener *listener, void *data) {
+	struct sway_xdg_shell_view *xdg_shell_view =
+		wl_container_of(listener, xdg_shell_view, cache);
+	struct wlr_surface_state *cached = data;
+	struct sway_view *view = &xdg_shell_view->view;
+	struct wlr_xdg_surface *xdg_surface = view->wlr_xdg_surface;
+
+	if (!view->container->node.instruction) {
+		return;
+	}
+
+	struct wlr_xdg_surface_state *xdg_cached;
+	wl_list_for_each(xdg_cached, &xdg_surface->cached, cached_state_link) {
+		if (cached->seq == xdg_cached->seq) {
+			transaction_unlock_view_by_serial(view, xdg_cached->configure_serial);
+			break;
+		}
+	}
+}
+
 static void handle_commit(struct wl_listener *listener, void *data) {
 	struct sway_xdg_shell_view *xdg_shell_view =
 		wl_container_of(listener, xdg_shell_view, commit);
@@ -418,6 +438,7 @@ static void handle_unmap(struct wl_listener *listener, void *data) {
 
 	view_unmap(view);
 
+	wl_list_remove(&xdg_shell_view->cache.link);
 	wl_list_remove(&xdg_shell_view->commit.link);
 	wl_list_remove(&xdg_shell_view->new_popup.link);
 	wl_list_remove(&xdg_shell_view->request_fullscreen.link);
@@ -457,6 +478,10 @@ static void handle_map(struct wl_listener *listener, void *data) {
 		csd);
 
 	transaction_commit_dirty();
+
+	xdg_shell_view->cache.notify = handle_cache;
+	wl_signal_add(&xdg_surface->surface->events.cache,
+		&xdg_shell_view->cache);
 
 	xdg_shell_view->commit.notify = handle_commit;
 	wl_signal_add(&xdg_surface->surface->events.commit,
