@@ -149,7 +149,7 @@ static void log_kernel(void) {
 }
 
 
-static bool drop_permissions(void) {
+static bool drop_permissions(bool allow_root) {
 	if (getuid() != geteuid() || getgid() != getegid()) {
 		// Set the gid and uid in the correct order.
 		if (setgid(getgid()) != 0) {
@@ -161,7 +161,7 @@ static bool drop_permissions(void) {
 			return false;
 		}
 	}
-	if (setgid(0) != -1 || setuid(0) != -1) {
+	if (!allow_root && (setgid(0) != -1 || setuid(0) != -1)) {
 		sway_log(SWAY_ERROR, "Unable to drop root (we shouldn't be able to "
 			"restore it after setuid), refusing to start");
 		return false;
@@ -207,7 +207,8 @@ static void handle_wlr_log(enum wlr_log_importance importance,
 }
 
 int main(int argc, char **argv) {
-	static int verbose = 0, debug = 0, validate = 0, allow_unsupported_gpu = 0;
+	static int verbose = 0, debug = 0, validate = 0,
+		allow_unsupported_gpu = 0, allow_root = 0;
 
 	static const struct option long_options[] = {
 		{"help", no_argument, NULL, 'h'},
@@ -219,6 +220,7 @@ int main(int argc, char **argv) {
 		{"get-socketpath", no_argument, NULL, 'p'},
 		{"unsupported-gpu", no_argument, NULL, 'u'},
 		{"my-next-gpu-wont-be-nvidia", no_argument, NULL, 'u'},
+		{"allow-root", no_argument, NULL, 'r'},
 		{0, 0, 0, 0}
 	};
 
@@ -234,6 +236,7 @@ int main(int argc, char **argv) {
 		"  -v, --version          Show the version number and quit.\n"
 		"  -V, --verbose          Enables more verbose logging.\n"
 		"      --get-socketpath   Gets the IPC socket path and prints it, then exits.\n"
+		"      --allow-root       Allow running with root privileges.\n"
 		"\n";
 
 	int c;
@@ -280,6 +283,9 @@ int main(int argc, char **argv) {
 				exit(EXIT_FAILURE);
 			}
 			break;
+		case 'r': // allow root
+			allow_root = 1;
+			break;
 		default:
 			fprintf(stderr, "%s", usage);
 			exit(EXIT_FAILURE);
@@ -325,7 +331,7 @@ int main(int argc, char **argv) {
 					"`sway -d 2>sway.log`.");
 			exit(EXIT_FAILURE);
 		}
-		if (!drop_permissions()) {
+		if (!drop_permissions(allow_root)) {
 			exit(EXIT_FAILURE);
 		}
 		char *socket_path = getenv("SWAYSOCK");
@@ -343,7 +349,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	if (!drop_permissions()) {
+	if (!drop_permissions(allow_root)) {
 		server_fini(&server);
 		exit(EXIT_FAILURE);
 	}
