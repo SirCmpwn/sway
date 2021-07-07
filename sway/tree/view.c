@@ -878,6 +878,7 @@ void view_unmap(struct sway_view *view) {
 		seat_consider_warp_to_focus(seat);
 	}
 
+	wl_signal_emit(&view->container->node.events.destroy, &view->container->node);
 	transaction_commit_dirty();
 	view->surface = NULL;
 }

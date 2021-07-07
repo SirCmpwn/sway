@@ -98,8 +98,6 @@ void container_begin_destroy(struct sway_container *con) {
 		container_fullscreen_disable(con);
 	}
 
-	wl_signal_emit(&con->node.events.destroy, &con->node);
-
 	container_end_mouse_operation(con);
 
 	con->node.destroying = true;
