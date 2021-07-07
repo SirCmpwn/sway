@@ -284,6 +284,14 @@ enum hotspot_event_handling i3bar_block_send_click(struct status_line *status,
 
 	json_object_object_add(event_json, "button",
 			json_object_new_int(event_to_x11_button(button)));
+
+	struct json_object *modifiers = json_object_new_array();
+	// char mods[16][16];
+	// int len = get_modifier_names(mods, button);
+	// while (len--)
+	// 	json_object_array_add(modifiers, json_object_new_string(mods[len]));
+
+	json_object_object_add(event_json, "modifiers", modifiers);
 	json_object_object_add(event_json, "event", json_object_new_int(button));
 	if (status->float_event_coords) {
 		json_object_object_add(event_json, "x", json_object_new_double(x));
