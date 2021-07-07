@@ -5,6 +5,7 @@
 #include <wlr/types/wlr_keyboard_shortcuts_inhibit_v1.h>
 #include <wlr/types/wlr_virtual_keyboard_v1.h>
 #include <wlr/types/wlr_virtual_pointer_v1.h>
+#include <wlr/types/wlr_transient_seat_v1.h>
 #include "sway/server.h"
 #include "sway/config.h"
 #include "list.h"
@@ -25,6 +26,7 @@ struct sway_input_manager {
 	struct wlr_keyboard_shortcuts_inhibit_manager_v1 *keyboard_shortcuts_inhibit;
 	struct wlr_virtual_keyboard_manager_v1 *virtual_keyboard;
 	struct wlr_virtual_pointer_manager_v1 *virtual_pointer;
+	struct wlr_transient_seat_manager_v1 *transient_seat_manager;
 
 	struct wl_listener new_input;
 	struct wl_listener inhibit_activate;

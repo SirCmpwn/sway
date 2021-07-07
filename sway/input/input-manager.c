@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 #include <wlr/backend/libinput.h>
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_keyboard_group.h>
@@ -442,6 +443,29 @@ void handle_virtual_pointer(struct wl_listener *listener, void *data) {
 	}
 }
 
+struct wlr_seat *transient_seat_manager_find_seat(const char *name) {
+	struct sway_seat* seat;
+	wl_list_for_each(seat, &server.input->seats, link) {
+		if (strcmp(seat->wlr_seat->name, name) == 0) {
+			return seat->wlr_seat;
+		}
+	}
+	return NULL;
+}
+
+struct wlr_seat *transient_seat_manager_create_seat(const char *name) {
+	struct sway_seat *seat = seat_create(name);
+	return seat ? seat->wlr_seat : NULL;
+}
+
+void transient_seat_manager_destroy_seat(struct wlr_seat *wlr_seat) {
+	struct sway_seat *seat =
+		input_manager_sway_seat_from_wlr_seat(wlr_seat);
+	if (seat) {
+		seat_destroy(seat);
+	}
+}
+
 struct sway_input_manager *input_manager_create(struct sway_server *server) {
 	struct sway_input_manager *input =
 		calloc(1, sizeof(struct sway_input_manager));
@@ -482,6 +506,14 @@ struct sway_input_manager *input_manager_create(struct sway_server *server) {
 		handle_keyboard_shortcuts_inhibit_new_inhibitor;
 	wl_signal_add(&input->keyboard_shortcuts_inhibit->events.new_inhibitor,
 			&input->keyboard_shortcuts_inhibit_new_inhibitor);
+
+	input->transient_seat_manager =
+		wlr_transient_seat_manager_v1_create(server->wl_display);
+	assert(input->transient_seat_manager);
+
+	input->transient_seat_manager->find_seat = transient_seat_manager_find_seat;
+	input->transient_seat_manager->create_seat = transient_seat_manager_create_seat;
+	input->transient_seat_manager->destroy_seat = transient_seat_manager_destroy_seat;
 
 	return input;
 }
