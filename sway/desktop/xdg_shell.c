@@ -376,7 +376,7 @@ static void handle_request_fullscreen(struct wl_listener *listener, void *data) 
 
 static void handle_request_maximize(struct wl_listener *listener, void *data) {
 	struct wlr_xdg_surface *surface = data;
-	wlr_xdg_surface_schedule_configure(surface);
+	wlr_xdg_toplevel_set_maximized(surface, false);
 }
 
 static void handle_request_move(struct wl_listener *listener, void *data) {
