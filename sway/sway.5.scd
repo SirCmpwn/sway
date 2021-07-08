@@ -59,9 +59,6 @@ to *sway-input*(5) and *sway-output*(5).
 
 The following commands may only be used in the configuration file.
 
-*bar* [<bar-id>] <bar-subcommands...>
-	For details on bar subcommands, see *sway-bar*(5).
-
 *default_orientation* horizontal|vertical|auto
 	Sets the default container layout for tiled containers.
 
@@ -380,6 +377,9 @@ runtime.
 	equivalent to:
 
 		for_window <criteria> move container to output <output>
+
+*bar* [<bar-id>] <bar-subcommands...>
+	For details on bar subcommands, see *sway-bar*(5).
 
 *bindsym* [--whole-window] [--border] [--exclude-titlebar] [--release] [--locked] \
 [--to-code] [--input-device=<device>] [--no-warn] [--no-repeat] [Group<1-4>+]<key combo> \
