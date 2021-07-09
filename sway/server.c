@@ -10,6 +10,7 @@
 #include <wlr/backend/noop.h>
 #include <wlr/backend/session.h>
 #include <wlr/config.h>
+#include <wlr/render/interface.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_data_control_v1.h>
@@ -17,6 +18,7 @@
 #include <wlr/types/wlr_gamma_control_v1.h>
 #include <wlr/types/wlr_idle.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
+#include <wlr/types/wlr_linux_dmabuf_v1.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
@@ -63,7 +65,15 @@ bool server_init(struct sway_server *server) {
 	struct wlr_renderer *renderer = wlr_backend_get_renderer(server->backend);
 	assert(renderer);
 
-	wlr_renderer_init_wl_display(renderer, server->wl_display);
+	wlr_renderer_init_wl_shm(renderer, server->wl_display);
+	if (renderer->impl->init_wl_display) {
+		renderer->impl->init_wl_display(renderer, server->wl_display);
+	}
+
+	if (wlr_renderer_get_dmabuf_texture_formats(renderer) != NULL) {
+		server->linux_dmabuf_v1 =
+			wlr_linux_dmabuf_v1_create(server->wl_display, renderer);
+	}
 
 	server->compositor = wlr_compositor_create(server->wl_display, renderer);
 	server->compositor_new_surface.notify = handle_compositor_new_surface;
