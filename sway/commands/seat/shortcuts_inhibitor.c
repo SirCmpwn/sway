@@ -2,6 +2,7 @@
 #include "sway/commands.h"
 #include "sway/input/seat.h"
 #include "sway/input/input-manager.h"
+#include "sway/ipc-server.h"
 #include "util.h"
 
 static struct cmd_results *handle_action(struct seat_config *sc,
@@ -12,6 +13,8 @@ static struct cmd_results *handle_action(struct seat_config *sc,
 
 		wl_list_for_each(sway_inhibitor,
 				&seat->keyboard_shortcuts_inhibitors, link) {
+			ipc_event_keyboard_shortcuts_inhibitor(
+					sway_inhibitor, "deactivate");
 			wlr_keyboard_shortcuts_inhibitor_v1_deactivate(
 					sway_inhibitor->inhibitor);
 		}
@@ -39,8 +42,12 @@ static struct cmd_results *handle_action(struct seat_config *sc,
 		}
 
 		if (inhibit) {
+			ipc_event_keyboard_shortcuts_inhibitor(
+					sway_inhibitor, "activate");
 			wlr_keyboard_shortcuts_inhibitor_v1_activate(inhibitor);
 		} else {
+			ipc_event_keyboard_shortcuts_inhibitor(
+					sway_inhibitor, "deactivate");
 			wlr_keyboard_shortcuts_inhibitor_v1_deactivate(inhibitor);
 		}
 

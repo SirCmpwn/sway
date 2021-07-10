@@ -2,7 +2,9 @@
 #define _SWAY_IPC_SERVER_H
 #include <sys/socket.h>
 #include "sway/config.h"
+#include "sway/desktop/idle_inhibit_v1.h"
 #include "sway/input/input-manager.h"
+#include "sway/input/seat.h"
 #include "sway/tree/container.h"
 #include "ipc.h"
 
@@ -21,5 +23,9 @@ void ipc_event_mode(const char *mode, bool pango);
 void ipc_event_shutdown(const char *reason);
 void ipc_event_binding(struct sway_binding *binding);
 void ipc_event_input(const char *change, struct sway_input_device *device);
+void ipc_event_idle_inhibitor(struct sway_idle_inhibitor_v1 *inhibitor, const char *change);
+void ipc_event_keyboard_shortcuts_inhibitor(
+		struct sway_keyboard_shortcuts_inhibitor *inhibitor,
+		const char *change);
 
 #endif

@@ -45,6 +45,10 @@ struct sway_idle_inhibitor_v1 *sway_idle_inhibit_v1_user_inhibitor_for_view(
 struct sway_idle_inhibitor_v1 *sway_idle_inhibit_v1_application_inhibitor_for_view(
 		struct sway_view *view);
 
+void sway_idle_inhibit_v1_user_inhibitor_update_mode(
+		struct sway_idle_inhibitor_v1 *inhibitor,
+		enum sway_idle_inhibit_mode mode);
+
 void sway_idle_inhibit_v1_user_inhibitor_destroy(
 		struct sway_idle_inhibitor_v1 *inhibitor);
 

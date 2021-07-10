@@ -1622,3 +1622,18 @@ keyboard_shortcuts_inhibitor_get_for_focused_surface(
 	return keyboard_shortcuts_inhibitor_get_for_surface(seat,
 		seat->wlr_seat->keyboard_state.focused_surface);
 }
+
+struct sway_keyboard_shortcuts_inhibitor *
+keyboard_shortcuts_inhibitor_get_for_surface_on_any_seat(
+		const struct wlr_surface *surface) {
+	struct sway_seat *seat = NULL;
+	wl_list_for_each(seat, &server.input->seats, link) {
+		struct sway_keyboard_shortcuts_inhibitor *sway_inhibitor =
+			keyboard_shortcuts_inhibitor_get_for_surface(seat, surface);
+		if (sway_inhibitor) {
+			return sway_inhibitor;
+		}
+	}
+
+	return NULL;
+}

@@ -3,12 +3,14 @@
 #include "log.h"
 #include "sway/desktop/idle_inhibit_v1.h"
 #include "sway/input/seat.h"
+#include "sway/ipc-server.h"
 #include "sway/tree/container.h"
 #include "sway/tree/view.h"
 #include "sway/server.h"
 
 
 static void destroy_inhibitor(struct sway_idle_inhibitor_v1 *inhibitor) {
+	ipc_event_idle_inhibitor(inhibitor, "destroy");
 	wl_list_remove(&inhibitor->link);
 	wl_list_remove(&inhibitor->destroy.link);
 	sway_idle_inhibit_v1_check_active(inhibitor->manager);
@@ -37,6 +39,9 @@ void handle_idle_inhibitor_v1(struct wl_listener *listener, void *data) {
 	inhibitor->manager = manager;
 	inhibitor->mode = INHIBIT_IDLE_APPLICATION;
 	inhibitor->wlr_inhibitor = wlr_inhibitor;
+
+	ipc_event_idle_inhibitor(inhibitor, "create");
+
 	wl_list_insert(&manager->inhibitors, &inhibitor->link);
 
 	inhibitor->destroy.notify = handle_destroy;
@@ -56,6 +61,9 @@ void sway_idle_inhibit_v1_user_inhibitor_register(struct sway_view *view,
 	inhibitor->manager = server.idle_inhibit_manager_v1;
 	inhibitor->mode = mode;
 	inhibitor->view = view;
+
+	ipc_event_idle_inhibitor(inhibitor, "create");
+
 	wl_list_insert(&inhibitor->manager->inhibitors, &inhibitor->link);
 
 	inhibitor->destroy.notify = handle_destroy;
@@ -88,6 +96,13 @@ struct sway_idle_inhibitor_v1 *sway_idle_inhibit_v1_application_inhibitor_for_vi
 		}
 	}
 	return NULL;
+}
+
+void sway_idle_inhibit_v1_user_inhibitor_update_mode(
+		struct sway_idle_inhibitor_v1 *inhibitor,
+		enum sway_idle_inhibit_mode mode) {
+	inhibitor->mode = mode;
+	ipc_event_idle_inhibitor(inhibitor, "mode");
 }
 
 void sway_idle_inhibit_v1_user_inhibitor_destroy(

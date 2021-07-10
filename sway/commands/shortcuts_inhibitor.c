@@ -3,6 +3,7 @@
 #include "sway/commands.h"
 #include "sway/config.h"
 #include "sway/input/seat.h"
+#include "sway/ipc-server.h"
 #include "sway/tree/container.h"
 #include "sway/tree/view.h"
 
@@ -33,12 +34,13 @@ struct cmd_results *cmd_shortcuts_inhibitor(int argc, char **argv) {
 				continue;
 			}
 
+			ipc_event_keyboard_shortcuts_inhibitor(
+					sway_inhibitor, "deactivate");
 			wlr_keyboard_shortcuts_inhibitor_v1_deactivate(
 					sway_inhibitor->inhibitor);
 			sway_log(SWAY_DEBUG, "Deactivated keyboard shortcuts "
 					"inhibitor for seat %s on view",
 					seat->wlr_seat->name);
-
 		}
 	} else {
 		return cmd_results_new(CMD_INVALID,
