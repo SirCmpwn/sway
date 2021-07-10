@@ -636,6 +636,10 @@ struct output_config *new_output_config(const char *name);
 
 void merge_output_config(struct output_config *dst, struct output_config *src);
 
+struct output_config *duplicate_output_config(const struct output_config *src);
+
+bool compare_output_config(const struct output_config *dst, const struct output_config *src);
+
 bool apply_output_config(struct output_config *oc, struct sway_output *output);
 
 bool test_output_config(struct output_config *oc, struct sway_output *output);
