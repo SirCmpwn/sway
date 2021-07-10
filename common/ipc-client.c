@@ -18,38 +18,10 @@ char *get_socketpath(void) {
 	if (swaysock) {
 		return strdup(swaysock);
 	}
-	char *line = NULL;
-	size_t line_size = 0;
-	FILE *fp = popen("sway --get-socketpath 2>/dev/null", "r");
-	if (fp) {
-		ssize_t nret = getline(&line, &line_size, fp);
-		pclose(fp);
-		if (nret > 0) {
-			// remove trailing newline, if there is one
-			if (line[nret - 1] == '\n') {
-				line[nret - 1] = '\0';
-			}
-			return line;
-		}
-	}
 	const char *i3sock = getenv("I3SOCK");
 	if (i3sock) {
-		free(line);
 		return strdup(i3sock);
 	}
-	fp = popen("i3 --get-socketpath 2>/dev/null", "r");
-	if (fp) {
-		ssize_t nret = getline(&line, &line_size, fp);
-		pclose(fp);
-		if (nret > 0) {
-			// remove trailing newline, if there is one
-			if (line[nret - 1] == '\n') {
-				line[nret - 1] = '\0';
-			}
-			return line;
-		}
-	}
-	free(line);
 	return NULL;
 }
 
