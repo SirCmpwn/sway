@@ -9,29 +9,29 @@ import argparse
 import i3ipc
 import signal
 import sys
+import re
 from functools import partial
 
-def on_window_focus(inactive_opacity, ipc, event):
+def on_window_focus(not_focused_opacity, focused_opacity, focused_regex, ipc, event):
     global prev_focused
     global prev_workspace
 
-    focused_workspace = ipc.get_tree().find_focused()
-
-    if focused_workspace == None:
-        return
-
     focused = event.container
-    workspace = focused_workspace.workspace().num
+    workspace = ipc.get_tree().find_focused().workspace().num
 
     if focused.id != prev_focused.id:  # https://github.com/swaywm/sway/issues/2859
-        focused.command("opacity 1")
+        if isinstance(focused.app_id, str) and re.match(focused_regex, focused.app_id):
+            focused.command("opacity " + focused_opacity)
+        else:
+            focused.command("opacity 1")
+
         if workspace == prev_workspace:
-            prev_focused.command("opacity " + inactive_opacity)
+            prev_focused.command("opacity " + not_focused_opacity)
         prev_focused = focused
         prev_workspace = workspace
 
 
-def remove_opacity(ipc):
+def restore_opacity(ipc):
     for workspace in ipc.get_tree().workspaces():
         for w in workspace:
             w.command("opacity 1")
@@ -40,8 +40,6 @@ def remove_opacity(ipc):
 
 
 if __name__ == "__main__":
-    transparency_val = "0.80"
-
     parser = argparse.ArgumentParser(
         description="This script allows you to set the transparency of unfocused windows in sway."
     )
@@ -49,8 +47,21 @@ if __name__ == "__main__":
         "--opacity",
         "-o",
         type=str,
-        default=transparency_val,
-        help="set opacity value in range 0...1",
+        default="0.80",
+        help="set unfocused window opacity value in range 0...1",
+    )
+    parser.add_argument(
+        "--focused-opacity",
+        "-f",
+        type=str,
+        default="1.00",
+        help="set focused window opacity value in range 0...1",
+    )
+    parser.add_argument(
+        "--focused-appid",
+        type=str,
+        default=".*",
+        help="set focused window opacity only for app_ids which match this regexp",
     )
     args = parser.parse_args()
 
@@ -64,6 +75,6 @@ if __name__ == "__main__":
         else:
             window.command("opacity " + args.opacity)
     for sig in [signal.SIGINT, signal.SIGTERM]:
-        signal.signal(sig, lambda signal, frame: remove_opacity(ipc))
-    ipc.on("window::focus", partial(on_window_focus, args.opacity))
+        signal.signal(sig, lambda signal, frame: restore_opacity(ipc))
+    ipc.on("window::focus", partial(on_window_focus, args.opacity, args.focused_opacity, args.focused_appid))
     ipc.main()
