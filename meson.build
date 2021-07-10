@@ -3,7 +3,7 @@ project(
 	'c',
 	version: '1.6',
 	license: 'MIT',
-	meson_version: '>=0.58.1',
+	meson_version: '>=0.59.0',
 	default_options: [
 		'c_std=c11',
 		'warning_level=2',
@@ -129,7 +129,6 @@ conf_data.set10('HAVE_TRAY', have_tray)
 scdoc = dependency('scdoc', version: '>=1.9.2', native: true, required: get_option('man-pages'))
 if scdoc.found()
 	scdoc_prog = find_program(scdoc.get_variable(pkgconfig: 'scdoc'), native: true)
-	sh = find_program('sh', native: true)
 	mandir = get_option('mandir')
 	man_files = [
 		'sway/sway.1.scd',
@@ -152,10 +151,10 @@ if scdoc.found()
 			output,
 			input: filename,
 			output: output,
-			command: [
-				sh, '-c', '@0@ < @INPUT@ > @1@'.format(scdoc_prog.full_path(), output)
-			],
+			command: scdoc_prog,
 			install: true,
+			feed: true,
+			capture: true,
 			install_dir: '@0@/man@1@'.format(mandir, section)
 		)
 	endforeach
