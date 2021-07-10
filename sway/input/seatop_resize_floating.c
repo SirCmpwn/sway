@@ -80,17 +80,25 @@ static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
 	double height = e->ref_height + grow_height;
 	int min_width, max_width, min_height, max_height;
 	floating_calculate_constraints(&min_width, &max_width,
-			&min_height, &max_height);
-	width = fmax(min_width + border_width, fmin(width, max_width));
-	height = fmax(min_height + border_height, fmin(height, max_height));
+		&min_height, &max_height);
+	width = fmin(width, max_width - border_width)
+	width = fmax(min_width + border_width, width);
+	width = fmax(width, 1);
+	height = fmin(height, max_height - border_height);
+	height = fmax(min_height + border_height, height);
+	height = fmax(bounded_height, 1);
 
 	// Apply the view's min/max size
 	if (con->view) {
 		double view_min_width, view_max_width, view_min_height, view_max_height;
 		view_get_constraints(con->view, &view_min_width, &view_max_width,
 				&view_min_height, &view_max_height);
-		width = fmax(view_min_width + border_width, fmin(width, view_max_width));
-		height = fmax(view_min_height + border_height, fmin(height, view_max_height));
+		width = fmin(width, view_max_width - border_width);
+		width = fmax(view_min_width + border_width, width);
+		width = fmax(bounded_view_width, 1);
+		height = fmin(height, view_max_height - border_height);
+		height = fmax(view_min_height + border_height, height);
+		height = fmax(bounded_view_height, 1);
 
 	}
 
