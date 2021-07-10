@@ -9,6 +9,7 @@
 #include "swaybar/config.h"
 #include "swaybar/input.h"
 #include "swaybar/ipc.h"
+#include "pointer-gestures-unstable-v1-client-protocol.h"
 
 void free_hotspots(struct wl_list *list) {
 	struct swaybar_hotspot *hotspot, *tmp;
@@ -118,6 +119,12 @@ static void wl_pointer_leave(void *data, struct wl_pointer *wl_pointer,
 		uint32_t serial, struct wl_surface *surface) {
 	struct swaybar_seat *seat = data;
 	seat->pointer.current = NULL;
+
+	struct swaybar_swipe *swipe = &seat->swipe;
+	if (swipe->swiping) {
+		sway_log(SWAY_DEBUG, "Cancelling ongoing swipe due to pointer leaving bar");
+		swipe->swiping = false;
+	}
 }
 
 static void wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
@@ -463,6 +470,115 @@ static const struct wl_touch_listener touch_listener = {
 	.orientation = wl_touch_orientation,
 };
 
+static uint32_t swipe_button_base(uint8_t fingers) {
+	if (fingers == 3) {
+		return SWAY_SWIPE_3;
+	} else if (fingers == 4) {
+		return SWAY_SWIPE_4;
+	}
+
+	return 0;
+}
+
+static void swipe_begin(void *data, struct zwp_pointer_gesture_swipe_v1 *wl_swipe,
+		uint32_t serial, uint32_t time, struct wl_surface *surface,
+		uint32_t fingers) {
+	struct swaybar_seat *seat = data;
+	struct swaybar_output *output;
+
+	wl_list_for_each(output, &seat->bar->outputs, link) {
+		if (output->surface == surface) {
+			surface = NULL;
+			break;
+		}
+	}
+
+	// we only want to respond to swipes on a bar surface
+	if (surface) {
+		return;
+	}
+
+	// Do not execute any button press bindings because due to the
+	// nature of swipes we cannot know yet what kind of swipe it is going
+	// to be.
+
+	struct swaybar_swipe *swipe = &seat->swipe;
+	swipe->swiping = true;
+	swipe->fingers = fingers;
+	swipe->travel_x = 0;
+	swipe->travel_y = 0;
+}
+
+static void swipe_update(void *data, struct zwp_pointer_gesture_swipe_v1 *wl_swipe,
+		uint32_t time, wl_fixed_t dx, wl_fixed_t dy) {
+	struct swaybar_seat *seat = data;
+	struct swaybar_swipe *swipe = &seat->swipe;
+
+	if (!swipe->swiping) {
+		sway_log(SWAY_DEBUG, "Ignoring swipe update without begin");
+		return;
+	}
+
+	swipe->travel_x += dx;
+	swipe->travel_y += dy;
+}
+
+static uint32_t swipe_to_button(struct swaybar_swipe *swipe) {
+	uint8_t direction;
+	if (fabs(swipe->travel_x) > fabs(swipe->travel_y)) {
+		if (swipe->travel_x > 0) {
+			direction = SWAY_SWIPE_DIR_RIGHT;
+		} else {
+			direction = SWAY_SWIPE_DIR_LEFT;
+		}
+	} else {
+		if (swipe->travel_y > 0) {
+			direction = SWAY_SWIPE_DIR_DOWN;
+		} else {
+			direction = SWAY_SWIPE_DIR_UP;
+		}
+	}
+
+	uint32_t button_base = swipe_button_base(swipe->fingers);
+	return button_base + direction;
+}
+
+static void swipe_end(void *data, struct zwp_pointer_gesture_swipe_v1
+		*zwp_pointer_gesture_swipe_v1, uint32_t serial, uint32_t time,
+		int32_t cancelled) {
+	struct swaybar_seat *seat = data;
+	struct swaybar_swipe *swipe = &seat->swipe;
+
+	if (!swipe->swiping) {
+		sway_log(SWAY_DEBUG, "Ignoring swipe end without begin");
+		return;
+	}
+
+	swipe->swiping = false;
+
+	// can happen when changing finger count mid-swipe or swiping off the
+	// tracking surface (touchpad)
+	if (cancelled) {
+		return;
+	}
+
+	uint32_t button = swipe_to_button(swipe);
+
+	// try to execute button press binding because now we know what kind of
+	// swipe this became. Ignore any on-release binding in case of success.
+	if (check_bindings(seat->bar, button, WL_POINTER_BUTTON_STATE_PRESSED)) {
+		return;
+	}
+
+	check_bindings(seat->bar, button, WL_POINTER_BUTTON_STATE_RELEASED);
+}
+
+static const struct zwp_pointer_gesture_swipe_v1_listener swipe_listener = {
+	.begin = swipe_begin,
+	.update = swipe_update,
+	.end = swipe_end,
+};
+
 static void seat_handle_capabilities(void *data, struct wl_seat *wl_seat,
 		enum wl_seat_capability caps) {
 	struct swaybar_seat *seat = data;
@@ -481,6 +597,11 @@ static void seat_handle_capabilities(void *data, struct wl_seat *wl_seat,
 			assert(seat->pointer.cursor_surface);
 		}
 		wl_pointer_add_listener(seat->pointer.pointer, &pointer_listener, seat);
+
+		seat->swipe.swipe = zwp_pointer_gestures_v1_get_swipe_gesture(
+				seat->bar->pointer_gestures, seat->pointer.pointer);
+		zwp_pointer_gesture_swipe_v1_add_listener(seat->swipe.swipe,
+				&swipe_listener, seat);
 	}
 	if (!have_touch && seat->touch.touch != NULL) {
 		wl_touch_release(seat->touch.touch);
@@ -516,6 +637,9 @@ void swaybar_seat_free(struct swaybar_seat *seat) {
 	}
 	if (seat->touch.touch != NULL) {
 		wl_touch_release(seat->touch.touch);
+	}
+	if (seat->swipe.swipe != NULL) {
+		zwp_pointer_gesture_swipe_v1_destroy(seat->swipe.swipe);
 	}
 	wl_seat_destroy(seat->wl_seat);
 	wl_list_remove(&seat->link);

@@ -15,6 +15,15 @@
 #define SWAY_SCROLL_LEFT KEY_MAX + 3
 #define SWAY_SCROLL_RIGHT KEY_MAX + 4
 
+#define SWAY_SWIPE_DIR_UP 0
+#define SWAY_SWIPE_DIR_DOWN 1
+#define SWAY_SWIPE_DIR_LEFT 2
+#define SWAY_SWIPE_DIR_RIGHT 3
+#define SWAY_SWIPE_DIR_COUNT 4
+
+#define SWAY_SWIPE_3 SWAY_SCROLL_RIGHT + 1
+#define SWAY_SWIPE_4 SWAY_SWIPE_3 + SWAY_SWIPE_DIR_COUNT
+
 struct sway_cursor {
 	struct sway_seat *seat;
 	struct wlr_cursor *cursor;

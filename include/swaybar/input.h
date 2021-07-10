@@ -13,6 +13,15 @@
 #define SWAY_CONTINUOUS_SCROLL_TIMEOUT 1000
 #define SWAY_CONTINUOUS_SCROLL_THRESHOLD 10000
 
+#define SWAY_SWIPE_DIR_UP 0
+#define SWAY_SWIPE_DIR_DOWN 1
+#define SWAY_SWIPE_DIR_LEFT 2
+#define SWAY_SWIPE_DIR_RIGHT 3
+#define SWAY_SWIPE_DIR_COUNT 4
+
+#define SWAY_SWIPE_3 SWAY_SCROLL_RIGHT + 1
+#define SWAY_SWIPE_4 SWAY_SWIPE_3 + SWAY_SWIPE_DIR_COUNT
+
 struct swaybar;
 struct swaybar_output;
 
@@ -37,6 +46,13 @@ struct touch_slot {
 struct swaybar_touch {
 	struct wl_touch *touch;
 	struct touch_slot slots[16];
+};
+
+struct swaybar_swipe {
+	struct zwp_pointer_gesture_swipe_v1 *swipe;
+	bool swiping;
+	uint8_t fingers;
+	double travel_x, travel_y;
 };
 
 enum hotspot_event_handling {
@@ -66,6 +82,7 @@ struct swaybar_seat {
 	struct wl_seat *wl_seat;
 	struct swaybar_pointer pointer;
 	struct swaybar_touch touch;
+	struct swaybar_swipe swipe;
 	struct wl_list link; // swaybar_seat:link
 	struct swaybar_scroll_axis axis[2];
 };

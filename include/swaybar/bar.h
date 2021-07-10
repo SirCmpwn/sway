@@ -6,6 +6,7 @@
 #include "pool-buffer.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
+#include "pointer-gestures-unstable-v1-client-protocol.h"
 
 struct swaybar_config;
 struct swaybar_output;
@@ -31,6 +32,7 @@ struct swaybar {
 	struct zwlr_layer_shell_v1 *layer_shell;
 	struct zxdg_output_manager_v1 *xdg_output_manager;
 	struct wl_shm *shm;
+	struct zwp_pointer_gestures_v1 *pointer_gestures;
 
 	struct swaybar_config *config;
 	struct status_line *status;

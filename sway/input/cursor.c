@@ -947,27 +947,24 @@ static void handle_pointer_swipe_begin(struct wl_listener *listener, void *data)
 	struct sway_cursor *cursor = wl_container_of(
 			listener, cursor, swipe_begin);
 	struct wlr_event_pointer_swipe_begin *event = data;
-	wlr_pointer_gestures_v1_send_swipe_begin(
-			cursor->pointer_gestures, cursor->seat->wlr_seat,
-			event->time_msec, event->fingers);
+	cursor_handle_activity_from_device(cursor, event->device);
+	seatop_swipe_begin(cursor->seat, event);
 }
 
 static void handle_pointer_swipe_update(struct wl_listener *listener, void *data) {
 	struct sway_cursor *cursor = wl_container_of(
 			listener, cursor, swipe_update);
 	struct wlr_event_pointer_swipe_update *event = data;
-	wlr_pointer_gestures_v1_send_swipe_update(
-			cursor->pointer_gestures, cursor->seat->wlr_seat,
-			event->time_msec, event->dx, event->dy);
+	cursor_handle_activity_from_device(cursor, event->device);
+	seatop_swipe_update(cursor->seat, event);
 }
 
 static void handle_pointer_swipe_end(struct wl_listener *listener, void *data) {
 	struct sway_cursor *cursor = wl_container_of(
 			listener, cursor, swipe_end);
 	struct wlr_event_pointer_swipe_end *event = data;
-	wlr_pointer_gestures_v1_send_swipe_end(
-			cursor->pointer_gestures, cursor->seat->wlr_seat,
-			event->time_msec, event->cancelled);
+	cursor_handle_activity_from_device(cursor, event->device);
+	seatop_swipe_end(cursor->seat, event);
 }
 
 static void handle_image_surface_destroy(struct wl_listener *listener,
@@ -1215,6 +1212,34 @@ uint32_t get_mouse_bindsym(const char *name, char **error) {
 			SWAY_SCROLL_UP, SWAY_SCROLL_DOWN, SWAY_SCROLL_LEFT,
 			SWAY_SCROLL_RIGHT, BTN_SIDE, BTN_EXTRA};
 		return buttons[number - 1];
+	} else if (strncmp(name, "SWIPE_", strlen("SWIPE_")) == 0) {
+		static const struct {
+			uint32_t button;
+			const char *dir;
+		} swipes[] = {
+			SWAY_SWIPE_3 + SWAY_SWIPE_DIR_UP, "3_UP",
+			SWAY_SWIPE_3 + SWAY_SWIPE_DIR_DOWN, "3_DOWN",
+			SWAY_SWIPE_3 + SWAY_SWIPE_DIR_LEFT, "3_LEFT",
+			SWAY_SWIPE_3 + SWAY_SWIPE_DIR_RIGHT, "3_RIGHT",
+			SWAY_SWIPE_4 + SWAY_SWIPE_DIR_UP, "4_UP",
+			SWAY_SWIPE_4 + SWAY_SWIPE_DIR_DOWN, "4_DOWN",
+			SWAY_SWIPE_4 + SWAY_SWIPE_DIR_LEFT, "4_LEFT",
+			SWAY_SWIPE_4 + SWAY_SWIPE_DIR_RIGHT, "4_RIGHT", 0, NULL,
+		}, *sp;
+
+		const char *dir = &name[strlen("SWIPE_")];
+		for (sp = swipes; sp->dir; sp++) {
+			if (strcmp(sp->dir, dir) == 0) {
+				break;
+			}
+		}
+
+		if (!sp->dir) {
+			*error = strdup("Unknown swipe type");
+			return 0;
+		}
+
+		return sp->button;
 	} else if (strncmp(name, "BTN_", strlen("BTN_")) == 0) {
 		// Get event code from name
 		int code = libevdev_event_code_from_name(EV_KEY, name);
@@ -1276,6 +1301,22 @@ const char *get_mouse_button_name(uint32_t button) {
 			name = "SWAY_SCROLL_LEFT";
 		} else if (button == SWAY_SCROLL_RIGHT) {
 			name = "SWAY_SCROLL_RIGHT";
+		} else if (button == SWAY_SWIPE_3 + SWAY_SWIPE_DIR_UP) {
+			name = "SWAY_SWIPE_3_UP";
+		} else if (button == SWAY_SWIPE_3 + SWAY_SWIPE_DIR_DOWN) {
+			name = "SWAY_SWIPE_3_DOWN";
+		} else if (button == SWAY_SWIPE_3 + SWAY_SWIPE_DIR_LEFT) {
+			name = "SWAY_SWIPE_3_LEFT";
+		} else if (button == SWAY_SWIPE_3 + SWAY_SWIPE_DIR_RIGHT) {
+			name = "SWAY_SWIPE_3_RIGHT";
+		} else if (button == SWAY_SWIPE_4 + SWAY_SWIPE_DIR_UP) {
+			name = "SWAY_SWIPE_4_UP";
+		} else if (button == SWAY_SWIPE_4 + SWAY_SWIPE_DIR_DOWN) {
+			name = "SWAY_SWIPE_4_DOWN";
+		} else if (button == SWAY_SWIPE_4 + SWAY_SWIPE_DIR_LEFT) {
+			name = "SWAY_SWIPE_4_LEFT";
+		} else if (button == SWAY_SWIPE_4 + SWAY_SWIPE_DIR_RIGHT) {
+			name = "SWAY_SWIPE_4_RIGHT";
 		}
 	}
 	return name;

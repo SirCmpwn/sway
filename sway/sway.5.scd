@@ -440,6 +440,17 @@ runtime.
 	is over an empty workspace. Using a mouse binding over a layer surface's
 	exclusive region is not currently possible.
 
+	Special events SWIPE\_{3,4}\_{UP,DOWN,LEFT,RIGHT} respond to three- and
+	four-finger swipe gestures respectively. The binding to execute is
+	selected based on the number of fingers used and ultimate overall
+	direction of the gesture. Because the latter cannot be determined
+	before the gesture has actually finished, bindings are only ever
+	executed on release. Therefore bindings with flag _--release_ are
+	ignored if there is an on-press binding as well because they would be
+	executed at the same time anyway. Gestures executed while the pointer
+	is above a bar are not handled by sway. See the respective
+	documentation, e.g. *bindsym* in *sway-bar*(5).
+
 	Example:
 ```
 		# Execute firefox when alt, shift, and f are pressed together
