@@ -43,8 +43,8 @@ static struct wlr_surface *layer_surface_at(struct sway_output *output,
 	wl_list_for_each_reverse(sway_layer, layer, link) {
 		double _sx = ox - sway_layer->geo.x;
 		double _sy = oy - sway_layer->geo.y;
-		struct wlr_surface *sub = wlr_layer_surface_v1_surface_at(
-			sway_layer->layer_surface, _sx, _sy, sx, sy);
+		struct wlr_surface *sub = sway_layer_surface_surface_at(
+			sway_layer, _sx, _sy, sx, sy);
 		if (sub) {
 			return sub;
 		}

@@ -41,6 +41,7 @@ void view_init(struct sway_view *view, enum sway_view_type type,
 	view->allow_request_urgent = true;
 	view->shortcuts_inhibit = SHORTCUTS_INHIBIT_DEFAULT;
 	wl_signal_init(&view->events.unmap);
+	wl_list_init(&view->input_popups);
 }
 
 void view_destroy(struct sway_view *view) {
@@ -74,6 +75,11 @@ void view_destroy(struct sway_view *view) {
 void view_begin_destroy(struct sway_view *view) {
 	if (!sway_assert(view->surface == NULL, "Tried to destroy a mapped view")) {
 		return;
+	}
+	struct sway_input_popup *popup, *tmp_popup;
+	wl_list_for_each_safe(popup, tmp_popup, &view->input_popups, view_link) {
+		wl_list_remove(&popup->view_link);
+		wl_list_init(&popup->view_link);
 	}
 	view->destroying = true;
 
@@ -439,6 +445,19 @@ void view_damage_from(struct sway_view *view) {
 	}
 }
 
+struct offset_iterator_data {
+	int offset_x, offset_y;
+	wlr_surface_iterator_func_t iterator;
+	void *user_data;
+};
+
+static void offset_iterator(struct wlr_surface *surface,
+		int sx, int sy, void *user_data) {
+	struct offset_iterator_data *data = user_data;
+	data->iterator(
+		surface, sx + data->offset_x, sy + data->offset_y, data->user_data);
+}
+
 void view_for_each_surface(struct sway_view *view,
 		wlr_surface_iterator_func_t iterator, void *user_data) {
 	if (!view->surface) {
@@ -449,6 +468,21 @@ void view_for_each_surface(struct sway_view *view,
 	} else {
 		wlr_surface_for_each_surface(view->surface, iterator, user_data);
 	}
+	struct sway_input_popup *popup;
+	wl_list_for_each(popup, &view->input_popups, view_link) {
+		if (!popup->popup_surface->mapped
+				|| !popup->visible) {
+			continue;
+		}
+		struct offset_iterator_data offset_data = {
+			.offset_x = popup->x,
+			.offset_y = popup->y,
+			.iterator = iterator,
+			.user_data = user_data,
+		};
+		wlr_surface_for_each_surface(
+			popup->popup_surface->surface, offset_iterator, &offset_data);
+	}
 }
 
 void view_for_each_popup_surface(struct sway_view *view,
@@ -458,6 +492,21 @@ void view_for_each_popup_surface(struct sway_view *view,
 	}
 	if (view->impl->for_each_popup_surface) {
 		view->impl->for_each_popup_surface(view, iterator, user_data);
+	}
+	struct sway_input_popup *popup;
+	wl_list_for_each(popup, &view->input_popups, view_link) {
+		if (!popup->popup_surface->mapped
+				|| !popup->visible) {
+			continue;
+		}
+		struct offset_iterator_data offset_data = {
+			.offset_x = popup->x,
+			.offset_y = popup->y,
+			.iterator = iterator,
+			.user_data = user_data,
+		};
+		wlr_surface_for_each_surface(
+			popup->popup_surface->surface, offset_iterator, &offset_data);
 	}
 }
 
@@ -1176,6 +1225,9 @@ struct sway_view *view_from_wlr_surface(struct wlr_surface *wlr_surface) {
 		return view_from_wlr_surface(subsurface->parent);
 	}
 	if (wlr_surface_is_layer_surface(wlr_surface)) {
+		return NULL;
+	}
+	if (wlr_surface_is_input_popup_surface_v2(wlr_surface)) {
 		return NULL;
 	}
 

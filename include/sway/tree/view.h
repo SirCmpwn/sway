@@ -103,6 +103,8 @@ struct sway_view {
 	struct wl_listener foreign_close_request;
 	struct wl_listener foreign_destroy;
 
+	struct wl_list input_popups;
+
 	bool destroying;
 
 	list_t *executed_criteria; // struct criteria *

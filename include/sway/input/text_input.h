@@ -22,16 +22,36 @@ struct sway_input_method_relay {
 	struct sway_seat *seat;
 
 	struct wl_list text_inputs; // sway_text_input::link
+	struct wl_list input_popups; // sway_input_popup::link
 	struct wlr_input_method_v2 *input_method; // doesn't have to be present
 
 	struct wl_listener text_input_new;
 
 	struct wl_listener input_method_new;
 	struct wl_listener input_method_commit;
+	struct wl_listener input_method_new_popup_surface;
 	struct wl_listener input_method_grab_keyboard;
 	struct wl_listener input_method_destroy;
 
 	struct wl_listener input_method_keyboard_grab_destroy;
+};
+
+struct sway_input_popup {
+	struct sway_input_method_relay *relay;
+	struct wlr_input_popup_surface_v2 *popup_surface;
+
+	int x, y;
+	bool visible;
+
+	struct wl_list link;
+	struct wl_list view_link;
+
+	struct wl_listener popup_map;
+	struct wl_listener popup_unmap;
+	struct wl_listener popup_destroy;
+	struct wl_listener popup_surface_commit;
+
+	struct wl_listener focused_surface_unmap;
 };
 
 struct sway_text_input {

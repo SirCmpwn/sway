@@ -23,6 +23,8 @@ struct sway_layer_surface {
 
 	struct wlr_box geo;
 	enum zwlr_layer_shell_v1_layer layer;
+
+	struct wl_list input_popups;
 };
 
 struct sway_layer_popup {
@@ -54,5 +56,14 @@ void arrange_layers(struct sway_output *output);
 
 struct sway_layer_surface *layer_from_wlr_layer_surface_v1(
 	struct wlr_layer_surface_v1 *layer_surface);
+struct wlr_surface *sway_layer_surface_surface_at(
+	struct sway_layer_surface *layer,
+	double sx, double sy, double *sub_x, double *sub_y);
+void sway_layer_surface_for_each_surface(
+	struct sway_layer_surface *layer,
+	wlr_surface_iterator_func_t iterator, void *user_data);
+void sway_layer_surface_for_each_popup_surface(
+	struct sway_layer_surface *layer,
+	wlr_surface_iterator_func_t iterator, void *user_data);
 
 #endif

@@ -352,6 +352,12 @@ static void handle_destroy(struct wl_listener *listener, void *data) {
 	if (sway_layer->layer_surface->mapped) {
 		unmap(sway_layer);
 	}
+	struct sway_input_popup *popup, *tmp_popup;
+	wl_list_for_each_safe(
+			popup, tmp_popup, &sway_layer->input_popups, view_link) {
+		wl_list_remove(&popup->view_link);
+		wl_list_init(&popup->view_link);
+	}
 	wl_list_remove(&sway_layer->link);
 	wl_list_remove(&sway_layer->destroy.link);
 	wl_list_remove(&sway_layer->map.link);
@@ -592,6 +598,89 @@ struct sway_layer_surface *layer_from_wlr_layer_surface_v1(
 	return layer_surface->data;
 }
 
+struct wlr_surface *sway_layer_surface_surface_at(
+		struct sway_layer_surface *layer,
+		double sx, double sy, double *sub_x, double *sub_y) {
+	struct sway_input_popup *popup;
+	wl_list_for_each(popup, &layer->input_popups, view_link) {
+		if (!popup->popup_surface->mapped || !popup->visible) {
+			continue;
+		}
+		struct wlr_surface *surface = wlr_surface_surface_at(
+			popup->popup_surface->surface,
+			sx - popup->x, sy - popup->y, sub_x, sub_y);
+		if (surface != NULL) {
+			*sub_x += popup->x;
+			*sub_y += popup->y;
+			return surface;
+		}
+	}
+	return wlr_layer_surface_v1_surface_at(
+		layer->layer_surface, sx, sy, sub_x, sub_y);
+}
+
+struct offset_iterator_data {
+	int offset_x, offset_y;
+	wlr_surface_iterator_func_t iterator;
+	void *user_data;
+};
+
+static void offset_iterator(struct wlr_surface *surface,
+		int sx, int sy, void *user_data) {
+	struct offset_iterator_data *data = user_data;
+	data->iterator(
+		surface, sx + data->offset_x, sy + data->offset_y, data->user_data);
+}
+
+void sway_layer_surface_for_each_surface(
+		struct sway_layer_surface *layer,
+		wlr_surface_iterator_func_t iterator, void *user_data) {
+	wlr_layer_surface_v1_for_each_surface(layer->layer_surface,
+		iterator, user_data);
+
+	struct sway_input_popup *popup;
+	wl_list_for_each(popup, &layer->input_popups, view_link) {
+		if (!popup->popup_surface->mapped || !popup->visible) {
+			continue;
+		}
+
+		struct wlr_surface *surface = popup->popup_surface->surface;
+		struct offset_iterator_data data = {
+			.iterator = iterator,
+			.user_data = user_data,
+			.offset_x = popup->x,
+			.offset_y = popup->y,
+		};
+
+		wlr_surface_for_each_surface(surface, offset_iterator, &data);
+	}
+}
+
+
+void sway_layer_surface_for_each_popup_surface(
+		struct sway_layer_surface *layer,
+		wlr_surface_iterator_func_t iterator, void *user_data) {
+	wlr_layer_surface_v1_for_each_popup_surface(layer->layer_surface,
+		iterator, user_data);
+
+	struct sway_input_popup *popup;
+	wl_list_for_each(popup, &layer->input_popups, view_link) {
+		if (!popup->popup_surface->mapped || !popup->visible) {
+			continue;
+		}
+
+		struct wlr_surface *surface = popup->popup_surface->surface;
+		struct offset_iterator_data data = {
+			.iterator = iterator,
+			.user_data = user_data,
+			.offset_x = popup->x,
+			.offset_y = popup->y,
+		};
+
+		wlr_surface_for_each_surface(surface, offset_iterator, &data);
+	}
+}
+
 void handle_layer_shell_surface(struct wl_listener *listener, void *data) {
 	struct wlr_layer_surface_v1 *layer_surface = data;
 	sway_log(SWAY_DEBUG, "new layer surface: namespace %s layer %d anchor %" PRIu32
@@ -634,6 +723,8 @@ void handle_layer_shell_surface(struct wl_listener *listener, void *data) {
 	if (!sway_layer) {
 		return;
 	}
+
+	wl_list_init(&sway_layer->input_popups);
 
 	sway_layer->surface_commit.notify = handle_surface_commit;
 	wl_signal_add(&layer_surface->surface->events.commit,

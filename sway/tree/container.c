@@ -192,6 +192,17 @@ static struct sway_container *surface_at_view(struct sway_container *con, double
 				view_sx, view_sy, &_sx, &_sy);
 		break;
 	}
+	struct sway_input_popup *popup;
+	wl_list_for_each(popup, &view->input_popups, view_link) {
+		if (!popup->popup_surface->mapped
+				|| !popup->visible) {
+			continue;
+		}
+		_surface = wlr_surface_surface_at(
+			popup->popup_surface->surface,
+			view_sx - popup->x, view_sy - popup->y,
+			&_sx, &_sy);
+	}
 	if (_surface) {
 		*sx = _sx;
 		*sy = _sy;
@@ -393,7 +404,7 @@ static bool surface_is_popup(struct wlr_surface *surface) {
 		return false;
 	}
 
-	return false;
+	return wlr_surface_is_input_popup_surface_v2(surface);
 }
 
 struct sway_container *container_at(struct sway_workspace *workspace,
