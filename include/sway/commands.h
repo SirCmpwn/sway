@@ -300,6 +300,11 @@ sway_cmd seat_cmd_pointer_constraint;
 sway_cmd seat_cmd_shortcuts_inhibitor;
 sway_cmd seat_cmd_xcursor_theme;
 
+sway_cmd xwayland_cmd_enable;
+sway_cmd xwayland_cmd_disable;
+sway_cmd xwayland_cmd_force;
+sway_cmd xwayland_cmd_scale;
+
 sway_cmd cmd_ipc_cmd;
 sway_cmd cmd_ipc_events;
 sway_cmd cmd_ipc_event_cmd;

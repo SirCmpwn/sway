@@ -771,6 +771,8 @@ void handle_xwayland_ready(struct wl_listener *listener, void *data) {
 		wl_container_of(listener, server, xwayland_ready);
 	struct sway_xwayland *xwayland = &server->xwayland;
 
+	wlr_xwayland_set_scale(xwayland->wlr_xwayland, config->xwayland_scale);
+
 	xcb_connection_t *xcb_conn = xcb_connect(NULL, NULL);
 	int err = xcb_connection_has_error(xcb_conn);
 	if (err) {

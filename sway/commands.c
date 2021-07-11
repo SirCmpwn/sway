@@ -95,6 +95,7 @@ static const struct cmd_handler handlers[] = {
 	{ "unbindsym", cmd_unbindsym },
 	{ "workspace", cmd_workspace },
 	{ "workspace_auto_back_and_forth", cmd_ws_auto_back_and_forth },
+	{ "xwayland", cmd_xwayland },
 };
 
 /* Config-time only commands. Keep alphabetized */
@@ -104,7 +105,6 @@ static const struct cmd_handler config_handlers[] = {
 	{ "swaybg_command", cmd_swaybg_command },
 	{ "swaynag_command", cmd_swaynag_command },
 	{ "workspace_layout", cmd_workspace_layout },
-	{ "xwayland", cmd_xwayland },
 };
 
 /* Runtime-only commands. Keep alphabetized */
