@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#include <limits.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -94,8 +95,14 @@ struct ipc_response *ipc_recv_response(int socketfd) {
 		goto error_1;
 	}
 
-	memcpy(&response->size, data + sizeof(ipc_magic), sizeof(uint32_t));
+	uint32_t size;
+	memcpy(&size, data + sizeof(ipc_magic), sizeof(uint32_t));
+	response->size = size;
 	memcpy(&response->type, data + sizeof(ipc_magic) + sizeof(uint32_t), sizeof(uint32_t));
+
+	if (response->size >= SSIZE_MAX) {
+		sway_abort("Unable to receive overly long IPC response");
+	}
 
 	char *payload = malloc(response->size + 1);
 	if (!payload) {
@@ -126,11 +133,16 @@ void free_ipc_response(struct ipc_response *response) {
 	free(response);
 }
 
-char *ipc_single_command(int socketfd, uint32_t type, const char *payload, uint32_t *len) {
+char *ipc_single_command(int socketfd, uint32_t type, const char *payload, size_t *len) {
 	char data[IPC_HEADER_SIZE];
+
+	if (*len > UINT32_MAX) {
+		sway_abort("Unable to send overly long IPC payload");
+	}
+	uint32_t size = *len;
 	memcpy(data, ipc_magic, sizeof(ipc_magic));
-	memcpy(data + sizeof(ipc_magic), len, sizeof(*len));
-	memcpy(data + sizeof(ipc_magic) + sizeof(*len), &type, sizeof(type));
+	memcpy(data + sizeof(ipc_magic), &size, sizeof(size));
+	memcpy(data + sizeof(ipc_magic) + sizeof(size), &type, sizeof(type));
 
 	if (write(socketfd, data, IPC_HEADER_SIZE) == -1) {
 		sway_abort("Unable to send IPC header");
@@ -141,9 +153,15 @@ char *ipc_single_command(int socketfd, uint32_t type, const char *payload, uint3
 	}
 
 	struct ipc_response *resp = ipc_recv_response(socketfd);
-	char *response = resp->payload;
-	*len = resp->size;
-	free(resp);
+	char *response;
+	if (resp == NULL) {
+		response = NULL;
+		*len = 0;
+	} else {
+		response = resp->payload;
+		*len = resp->size;
+		free(resp);
+	}
 
 	return response;
 }

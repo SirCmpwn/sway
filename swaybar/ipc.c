@@ -19,7 +19,7 @@
 #include "util.h"
 
 void ipc_send_workspace_command(struct swaybar *bar, const char *ws) {
-	uint32_t size = strlen("workspace \"\"") + strlen(ws);
+	size_t size = strlen("workspace \"\"") + strlen(ws);
 	for (size_t i = 0; i < strlen(ws); ++i) {
 		if (ws[i] == '"' || ws[i] == '\\') {
 			++size;
@@ -341,9 +341,12 @@ bool ipc_get_workspaces(struct swaybar *bar) {
 		free_workspaces(&output->workspaces);
 		output->focused = false;
 	}
-	uint32_t len = 0;
+	size_t len = 0;
 	char *res = ipc_single_command(bar->ipc_socketfd,
 			IPC_GET_WORKSPACES, NULL, &len);
+	if (res == NULL) {
+		return false;
+	}
 	json_object *results = json_tokener_parse(res);
 	if (!results) {
 		free(res);
@@ -409,16 +412,16 @@ bool ipc_get_workspaces(struct swaybar *bar) {
 void ipc_execute_binding(struct swaybar *bar, struct swaybar_binding *bind) {
 	sway_log(SWAY_DEBUG, "Executing binding for button %u (release=%d): `%s`",
 			bind->button, bind->release, bind->command);
-	uint32_t len = strlen(bind->command);
+	size_t len = strlen(bind->command);
 	free(ipc_single_command(bar->ipc_socketfd,
 			IPC_COMMAND, bind->command, &len));
 }
 
 bool ipc_initialize(struct swaybar *bar) {
-	uint32_t len = strlen(bar->id);
+	size_t len = strlen(bar->id);
 	char *res = ipc_single_command(bar->ipc_socketfd,
 			IPC_GET_BAR_CONFIG, bar->id, &len);
-	if (!ipc_parse_config(bar->config, res)) {
+	if (res == NULL || !ipc_parse_config(bar->config, res)) {
 		free(res);
 		return false;
 	}

@@ -476,8 +476,16 @@ int main(int argc, char **argv) {
 	int socketfd = ipc_open_socket(socket_path);
 	struct timeval timeout = {.tv_sec = 3, .tv_usec = 0};
 	ipc_set_recv_timeout(socketfd, timeout);
-	uint32_t len = strlen(command);
+	size_t len = strlen(command);
 	char *resp = ipc_single_command(socketfd, type, command, &len);
+	if (resp == NULL) {
+		if (!quiet) {
+			sway_log(SWAY_ERROR, "Failed to receive reply");
+		}
+		close(socketfd);
+		free(socket_path);
+		return 1;
+	}
 
 	// pretty print the json
 	json_object *obj = json_tokener_parse(resp);

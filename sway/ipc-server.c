@@ -48,6 +48,9 @@ struct ipc_client {
 	struct sway_server *server;
 	int fd;
 	enum ipc_command_type subscribed_events;
+	size_t read_buffer_len;
+	size_t read_buffer_size;
+	char *read_buffer;
 	size_t write_buffer_len;
 	size_t write_buffer_size;
 	char *write_buffer;
@@ -187,11 +190,23 @@ int ipc_handle_connection(int fd, uint32_t mask, void *data) {
 			client_fd, WL_EVENT_READABLE, ipc_client_handle_readable, client);
 	client->writable_event_source = NULL;
 
+	client->read_buffer_size = 128;
+	client->read_buffer_len = 0;
+	client->read_buffer = malloc(client->read_buffer_size);
+	if (!client->read_buffer) {
+		sway_log(SWAY_ERROR, "Unable to allocate ipc client read buffer");
+		free(client);
+		close(client_fd);
+		return 0;
+	}
+
 	client->write_buffer_size = 128;
 	client->write_buffer_len = 0;
 	client->write_buffer = malloc(client->write_buffer_size);
 	if (!client->write_buffer) {
 		sway_log(SWAY_ERROR, "Unable to allocate ipc client write buffer");
+		free(client->read_buffer);
+		free(client);
 		close(client_fd);
 		return 0;
 	}
@@ -224,49 +239,67 @@ int ipc_client_handle_readable(int client_fd, uint32_t mask, void *data) {
 		ipc_client_disconnect(client);
 		return 0;
 	}
+	if ((size_t)read_available + 1 > SIZE_MAX - client->read_buffer_len) {
+		sway_log_errno(SWAY_INFO, "Receiving too much data from IPC client");
+		ipc_client_disconnect(client);
+		return 0;
+	}
 
-	// Wait for the rest of the command payload in case the header has already been read
-	if (client->pending_length > 0) {
-		if ((uint32_t)read_available >= client->pending_length) {
-			// Reset pending values.
-			uint32_t pending_length = client->pending_length;
-			enum ipc_command_type pending_type = client->pending_type;
-			client->pending_length = 0;
-			ipc_client_handle_command(client, pending_length, pending_type);
+	if (client->read_buffer_len + read_available >= client->read_buffer_size) {
+		size_t new_size = client->read_buffer_len + read_available + 1;
+		char *new_buffer = realloc(client->read_buffer, new_size);
+		if (new_buffer == NULL) {
+			sway_log_errno(SWAY_INFO, "Unable to increase read buffer for IPC client");
+			ipc_client_disconnect(client);
+			return 0;
 		}
-		return 0;
+		client->read_buffer = new_buffer;
+		client->read_buffer_size = new_size;
 	}
 
-	if (read_available < (int) IPC_HEADER_SIZE) {
-		return 0;
-	}
-
-	uint8_t buf[IPC_HEADER_SIZE];
-	// Should be fully available, because read_available >= IPC_HEADER_SIZE
-	ssize_t received = recv(client_fd, buf, IPC_HEADER_SIZE, 0);
+	ssize_t received = recv(client_fd, client->read_buffer + client->read_buffer_len, read_available, 0);
 	if (received == -1) {
 		sway_log_errno(SWAY_INFO, "Unable to receive header from IPC client");
 		ipc_client_disconnect(client);
 		return 0;
 	}
+	client->read_buffer_len += received;
 
-	if (memcmp(buf, ipc_magic, sizeof(ipc_magic)) != 0) {
-		sway_log(SWAY_DEBUG, "IPC header check failed");
-		ipc_client_disconnect(client);
-		return 0;
+	if (client->pending_length == 0) {
+		if (client->read_buffer_len < (size_t) IPC_HEADER_SIZE) {
+			return 0;
+		}
+
+		if (memcmp(client->read_buffer, ipc_magic, sizeof(ipc_magic)) != 0) {
+			sway_log(SWAY_DEBUG, "IPC header check failed");
+			ipc_client_disconnect(client);
+			return 0;
+		}
+
+		memcpy(&client->pending_length,
+				client->read_buffer + sizeof(ipc_magic), sizeof(uint32_t));
+		memcpy(&client->pending_type,
+				client->read_buffer + sizeof(ipc_magic) + sizeof(uint32_t), sizeof(uint32_t));
+		if (client->pending_length > IPC_MAX_SIZE) {
+			sway_log_errno(SWAY_INFO, "Receiving too much payload from IPC client");
+			ipc_client_disconnect(client);
+			return 0;
+		}
 	}
 
-	memcpy(&client->pending_length, buf + sizeof(ipc_magic), sizeof(uint32_t));
-	memcpy(&client->pending_type, buf + sizeof(ipc_magic) + sizeof(uint32_t), sizeof(uint32_t));
-
-	if (read_available - received >= (long)client->pending_length) {
-		// Reset pending values.
+	if (client->read_buffer_len >= IPC_HEADER_SIZE + client->pending_length) {
 		uint32_t pending_length = client->pending_length;
 		enum ipc_command_type pending_type = client->pending_type;
-		client->pending_length = 0;
+		char c = client->read_buffer[IPC_HEADER_SIZE + client->pending_length];
+		client->read_buffer[IPC_HEADER_SIZE + client->pending_length] = '\0';
 		ipc_client_handle_command(client, pending_length, pending_type);
+		// Reset values.
+		client->read_buffer[IPC_HEADER_SIZE + client->pending_length] = c;
+		memmove(client->read_buffer, client->read_buffer + IPC_HEADER_SIZE + client->pending_length,
+				client->read_buffer_len - IPC_HEADER_SIZE - client->pending_length);
+		client->read_buffer_len -= IPC_HEADER_SIZE + client->pending_length;
+		client->pending_length = 0;
 	}
-
 	return 0;
 }
 
@@ -572,6 +605,7 @@ void ipc_client_disconnect(struct ipc_client *client) {
 		i++;
 	}
 	list_del(ipc_client_list, i);
+	free(client->read_buffer);
 	free(client->write_buffer);
 	close(client->fd);
 	free(client);
@@ -610,24 +644,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		return;
 	}
 
-	char *buf = malloc(payload_length + 1);
-	if (!buf) {
-		sway_log_errno(SWAY_INFO, "Unable to allocate IPC payload");
-		ipc_client_disconnect(client);
-		return;
-	}
-	if (payload_length > 0) {
-		// Payload should be fully available
-		ssize_t received = recv(client->fd, buf, payload_length, 0);
-		if (received == -1)
-		{
-			sway_log_errno(SWAY_INFO, "Unable to receive payload from IPC client");
-			ipc_client_disconnect(client);
-			free(buf);
-			return;
-		}
-	}
-	buf[payload_length] = '\0';
+	char *buf = client->read_buffer + IPC_HEADER_SIZE;
 
 	switch (payload_type) {
 	case IPC_COMMAND:
@@ -654,14 +671,14 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 			list_del(res_list, 0);
 		}
 		list_free(res_list);
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_SEND_TICK:
 	{
 		ipc_event_tick(buf);
 		ipc_send_reply(client, payload_type, "{\"success\": true}", 17);
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_GET_OUTPUTS:
@@ -696,7 +713,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		ipc_send_reply(client, payload_type, json_string,
 			(uint32_t)strlen(json_string));
 		json_object_put(outputs); // free
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_GET_WORKSPACES:
@@ -707,7 +724,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		ipc_send_reply(client, payload_type, json_string,
 			(uint32_t)strlen(json_string));
 		json_object_put(workspaces); // free
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_SUBSCRIBE:
@@ -718,7 +735,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 			const char msg[] = "{\"success\": false}";
 			ipc_send_reply(client, payload_type, msg, strlen(msg));
 			sway_log(SWAY_INFO, "Failed to parse subscribe request");
-			goto exit_cleanup;
+			break;
 		}
 
 		bool is_tick = false;
@@ -749,7 +766,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 				ipc_send_reply(client, payload_type, msg, strlen(msg));
 				json_object_put(request);
 				sway_log(SWAY_INFO, "Unsupported event type in subscribe request");
-				goto exit_cleanup;
+				return;
 			}
 		}
 
@@ -761,7 +778,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 			ipc_send_reply(client, IPC_EVENT_TICK, tickmsg,
 				strlen(tickmsg));
 		}
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_GET_INPUTS:
@@ -775,7 +792,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		ipc_send_reply(client, payload_type, json_string,
 			(uint32_t)strlen(json_string));
 		json_object_put(inputs); // free
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_GET_SEATS:
@@ -789,7 +806,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		ipc_send_reply(client, payload_type, json_string,
 			(uint32_t)strlen(json_string));
 		json_object_put(seats); // free
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_GET_TREE:
@@ -799,7 +816,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		ipc_send_reply(client, payload_type, json_string,
 			(uint32_t)strlen(json_string));
 		json_object_put(tree);
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_GET_MARKS:
@@ -810,7 +827,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		ipc_send_reply(client, payload_type, json_string,
 			(uint32_t)strlen(json_string));
 		json_object_put(marks);
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_GET_VERSION:
@@ -820,7 +837,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		ipc_send_reply(client, payload_type, json_string,
 			(uint32_t)strlen(json_string));
 		json_object_put(version); // free
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_GET_BAR_CONFIG:
@@ -850,7 +867,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 				const char *error = "{ \"success\": false, \"error\": \"No bar with that ID\" }";
 				ipc_send_reply(client, payload_type, error,
 					(uint32_t)strlen(error));
-				goto exit_cleanup;
+				break;
 			}
 			json_object *json = ipc_json_describe_bar_config(bar);
 			const char *json_string = json_object_to_json_string(json);
@@ -858,7 +875,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 				(uint32_t)strlen(json_string));
 			json_object_put(json); // free
 		}
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_GET_BINDING_MODES:
@@ -872,7 +889,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		ipc_send_reply(client, payload_type, json_string,
 			(uint32_t)strlen(json_string));
 		json_object_put(modes); // free
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_GET_BINDING_STATE:
@@ -882,7 +899,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		ipc_send_reply(client, payload_type, json_string,
 			(uint32_t)strlen(json_string));
 		json_object_put(current_mode); // free
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_GET_CONFIG:
@@ -893,7 +910,7 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		ipc_send_reply(client, payload_type, json_string,
 			(uint32_t)strlen(json_string));
 		json_object_put(json); // free
-		goto exit_cleanup;
+		break;
 	}
 
 	case IPC_SYNC:
@@ -901,17 +918,13 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		// It was decided sway will not support this, just return success:false
 		const char msg[] = "{\"success\": false}";
 		ipc_send_reply(client, payload_type, msg, strlen(msg));
-		goto exit_cleanup;
+		break;
 	}
 
 	default:
 		sway_log(SWAY_INFO, "Unknown IPC command type %x", payload_type);
-		goto exit_cleanup;
+		break;
 	}
-
-exit_cleanup:
-	free(buf);
-	return;
 }
 
 bool ipc_send_reply(struct ipc_client *client, enum ipc_command_type payload_type,
@@ -929,7 +942,7 @@ bool ipc_send_reply(struct ipc_client *client, enum ipc_command_type payload_typ
 		client->write_buffer_size *= 2;
 	}
 
-	if (client->write_buffer_size > 4e6) { // 4 MB
+	if (client->write_buffer_size > IPC_MAX_SIZE) {
 		sway_log(SWAY_ERROR, "Client write buffer too big (%zu), disconnecting client",
 				client->write_buffer_size);
 		ipc_client_disconnect(client);

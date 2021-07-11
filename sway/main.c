@@ -87,9 +87,9 @@ void detect_proprietary(int allow_unsupported_gpu) {
 
 void run_as_ipc_client(char *command, char *socket_path) {
 	int socketfd = ipc_open_socket(socket_path);
-	uint32_t len = strlen(command);
+	size_t len = strlen(command);
 	char *resp = ipc_single_command(socketfd, IPC_COMMAND, command, &len);
-	printf("%s\n", resp);
+	printf("%s\n", resp == NULL ? "(null)" : resp);
 	free(resp);
 	close(socketfd);
 }
