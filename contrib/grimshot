@@ -32,7 +32,7 @@ FILE=${3:-$(getTargetDirectory)/$(date -Ins).png}
 
 if [ "$ACTION" != "save" ] && [ "$ACTION" != "copy" ] && [ "$ACTION" != "check" ]; then
   echo "Usage:"
-  echo "  grimshot [--notify] (copy|save) [active|screen|output|area|window] [FILE|-]"
+  echo "  grimshot [--notify] (copy|save) [active|screen|output|area|window|anything] [FILE|-]"
   echo "  grimshot check"
   echo "  grimshot usage"
   echo ""
@@ -47,7 +47,8 @@ if [ "$ACTION" != "save" ] && [ "$ACTION" != "copy" ] && [ "$ACTION" != "check" 
   echo "  screen: All visible outputs."
   echo "  output: Currently active output."
   echo "  area: Manually select a region."
-  echo "  window: Manually select a window."
+  echo "  window: Manually select an area or window."
+  echo "  anything: Manually select an area, window, or output."
   exit
 fi
 
@@ -135,6 +136,13 @@ elif [ "$SUBJECT" = "window" ] ; then
    exit 1
   fi
   WHAT="Window"
+elif [ "$SUBJECT" = "anything" ] ; then
+  GEOM=$(swaymsg -t get_tree | jq -r '.. | select(.pid? and .visible?) | .rect | "\(.x),\(.y) \(.width)x\(.height)"' | slurp -o)
+  # Check if user exited slurp without selecting the area
+  if [ -z "$GEOM" ]; then
+   exit
+  fi
+  WHAT="Anything"
 else
   die "Unknown subject to take a screen shot from" "$SUBJECT"
 fi

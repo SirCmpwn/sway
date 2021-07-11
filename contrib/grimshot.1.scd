@@ -67,6 +67,11 @@ _window_
 _output_
 	Captures the currently active output.
 
+_selection_
+	Allows manually selection a single window (by clicking on it), an output (by
+	clicking outside of all windows, e.g. on the status bar), or an area (by
+	using click and drag).
+
 # OUTPUT
 
 Grimshot will print the filename of the captured screenshot to stdout if called
