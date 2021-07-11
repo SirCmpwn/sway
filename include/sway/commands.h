@@ -121,6 +121,7 @@ sway_cmd cmd_create_output;
 sway_cmd cmd_default_border;
 sway_cmd cmd_default_floating_border;
 sway_cmd cmd_default_orientation;
+sway_cmd cmd_drag_mode;
 sway_cmd cmd_exec;
 sway_cmd cmd_exec_always;
 sway_cmd cmd_exit;

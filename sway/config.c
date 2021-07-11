@@ -266,6 +266,7 @@ static void config_defaults(struct sway_config *config) {
 	config->title_align = ALIGN_LEFT;
 	config->tiling_drag = true;
 	config->tiling_drag_threshold = 9;
+    config->drag_mode = false;
 
 	config->smart_gaps = false;
 	config->gaps_inner = 0;

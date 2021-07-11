@@ -396,7 +396,8 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 
 	// Handle tiling resize via mod
 	bool mod_pressed = modifiers & config->floating_mod;
-	if (cont && !is_floating_or_child && mod_pressed &&
+    bool drag_mode = config->drag_mode;
+	if (cont && !is_floating_or_child && (drag_mode || mod_pressed) &&
 			state == WLR_BUTTON_PRESSED) {
 		uint32_t btn_resize = config->floating_mod_inverse ?
 			BTN_LEFT : BTN_RIGHT;
@@ -428,7 +429,7 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 	if (cont && is_floating_or_child && !is_fullscreen_or_child &&
 			state == WLR_BUTTON_PRESSED) {
 		uint32_t btn_move = config->floating_mod_inverse ? BTN_RIGHT : BTN_LEFT;
-		if (button == btn_move && (mod_pressed || on_titlebar)) {
+		if (button == btn_move && (mod_pressed || on_titlebar || drag_mode)) {
 			seat_set_focus_container(seat,
 					seat_get_focus_inactive_view(seat, &cont->node));
 			seatop_begin_move_floating(seat, container_toplevel_ancestor(cont));
@@ -448,7 +449,7 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 		// Via mod+click
 		uint32_t btn_resize = config->floating_mod_inverse ?
 			BTN_LEFT : BTN_RIGHT;
-		if (mod_pressed && button == btn_resize) {
+		if ((mod_pressed || drag_mode) && button == btn_resize) {
 			struct sway_container *floater = container_toplevel_ancestor(cont);
 			edge = 0;
 			edge |= cursor->cursor->x > floater->pending.x + floater->pending.width / 2 ?
@@ -461,7 +462,7 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 	}
 
 	// Handle moving a tiling container
-	if (config->tiling_drag && (mod_pressed || on_titlebar) &&
+	if (config->tiling_drag && (mod_pressed || on_titlebar || drag_mode) &&
 			state == WLR_BUTTON_PRESSED && !is_floating_or_child &&
 			cont && cont->pending.fullscreen_mode == FULLSCREEN_NONE) {
 		struct sway_container *focus = seat_get_focused_container(seat);
@@ -472,7 +473,7 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 		}
 
 		// If moving a container by it's title bar, use a threshold for the drag
-		if (!mod_pressed && config->tiling_drag_threshold > 0) {
+		if (!(mod_pressed || drag_mode) && config->tiling_drag_threshold > 0) {
 			seatop_begin_move_tiling_threshold(seat, cont);
 		} else {
 			seatop_begin_move_tiling(seat, cont);
