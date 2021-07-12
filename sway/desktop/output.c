@@ -4,8 +4,10 @@
 #include <strings.h>
 #include <time.h>
 #include <wayland-server-core.h>
+#include <wlr/backend/drm.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_buffer.h>
+#include <wlr/types/wlr_drm_lease_v1.h>
 #include <wlr/types/wlr_matrix.h>
 #include <wlr/types/wlr_output_damage.h>
 #include <wlr/types/wlr_output_layout.h>
@@ -836,7 +838,17 @@ static void handle_present(struct wl_listener *listener, void *data) {
 void handle_new_output(struct wl_listener *listener, void *data) {
 	struct sway_server *server = wl_container_of(listener, server, new_output);
 	struct wlr_output *wlr_output = data;
-	sway_log(SWAY_DEBUG, "New output %p: %s", wlr_output, wlr_output->name);
+	sway_log(SWAY_DEBUG, "New output %p: %s (non-desktop: %d)",
+			wlr_output, wlr_output->name, wlr_output->non_desktop);
+
+	if (wlr_output->non_desktop) {
+		sway_log(SWAY_DEBUG, "Not configuring non-desktop output");
+		if (server->drm_lease_manager) {
+			wlr_drm_lease_v1_manager_offer_output(server->drm_lease_manager,
+					wlr_output);
+		}
+		return;
+	}
 
 	struct sway_output *output = output_create(wlr_output);
 	if (!output) {

@@ -13,6 +13,7 @@
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_data_control_v1.h>
+#include <wlr/types/wlr_drm_lease_v1.h>
 #include <wlr/types/wlr_export_dmabuf_v1.h>
 #include <wlr/types/wlr_gamma_control_v1.h>
 #include <wlr/types/wlr_idle.h>
@@ -55,6 +56,18 @@ bool server_privileged_prepare(struct sway_server *server) {
 		return false;
 	}
 	return true;
+}
+
+static void handle_drm_lease_request(struct wl_listener *listener, void *data) {
+	/* We only offer non-desktop outputs, but in the future we might want to do
+	 * more logic here. */
+
+	struct wlr_drm_lease_request_v1 *req = data;
+	struct wlr_drm_lease_v1 *lease = wlr_drm_lease_request_v1_grant(req);
+	if (!lease) {
+		sway_log(SWAY_ERROR, "Failed to grant lease request");
+		wlr_drm_lease_request_v1_reject(req);
+	}
 }
 
 bool server_init(struct sway_server *server) {
@@ -148,6 +161,17 @@ bool server_init(struct sway_server *server) {
 	server->text_input = wlr_text_input_manager_v3_create(server->wl_display);
 	server->foreign_toplevel_manager =
 		wlr_foreign_toplevel_manager_v1_create(server->wl_display);
+
+	server->drm_lease_manager=
+		wlr_drm_lease_v1_manager_create(server->wl_display, server->backend);
+	if (server->drm_lease_manager) {
+		server->drm_lease_request.notify = handle_drm_lease_request;
+		wl_signal_add(&server->drm_lease_manager->events.request,
+				&server->drm_lease_request);
+	} else {
+		sway_log(SWAY_DEBUG, "Failed to create wlr_drm_lease_device_v1");
+		sway_log(SWAY_INFO, "VR will not be available");
+	}
 
 	wlr_export_dmabuf_manager_v1_create(server->wl_display);
 	wlr_screencopy_manager_v1_create(server->wl_display);
