@@ -255,18 +255,10 @@ list_t *execute_command(char *_exec, struct sway_seat *seat,
 			continue;
 		}
 		sway_log(SWAY_INFO, "Handling command '%s'", cmd);
+
 		//TODO better handling of argv
 		int argc;
 		char **argv = split_args(cmd, &argc);
-		if (strcmp(argv[0], "exec") != 0 &&
-				strcmp(argv[0], "exec_always") != 0 &&
-				strcmp(argv[0], "mode") != 0) {
-			for (int i = 1; i < argc; ++i) {
-				if (*argv[i] == '\"' || *argv[i] == '\'') {
-					strip_quotes(argv[i]);
-				}
-			}
-		}
 		const struct cmd_handler *handler = find_core_handler(argv[0]);
 		if (!handler) {
 			list_add(res_list, cmd_results_new(CMD_INVALID,
@@ -280,6 +272,15 @@ list_t *execute_command(char *_exec, struct sway_seat *seat,
 			argv[i] = do_var_replacement(argv[i]);
 		}
 
+		// Unescape
+		for (int i = 1; i < argc; ++i) {
+			if (handler->handle != cmd_exec && handler->handle != cmd_exec_always
+					&& handler->handle != cmd_mode
+					&& (*argv[i] == '\"' || *argv[i] == '\'')) {
+				strip_quotes(argv[i]);
+			}
+			unescape_string(argv[i]);
+		}
 
 		if (!using_criteria) {
 			if (con) {
