@@ -1134,6 +1134,9 @@ following properties:
 |- scroll_factor
 :  floating
 :  (Only pointers) Multiplier applied on scroll event values.
+|- sensitivity
+:  floating
+:  (Only pointers) Multiplier applied on relative pointer movements.
 |- libinput
 :  object
 :  (Only libinput devices) An object describing the current device settings.

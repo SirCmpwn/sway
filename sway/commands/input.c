@@ -27,6 +27,7 @@ static const struct cmd_handler input_handlers[] = {
 	{ "scroll_button", input_cmd_scroll_button },
 	{ "scroll_factor", input_cmd_scroll_factor },
 	{ "scroll_method", input_cmd_scroll_method },
+	{ "sensitivity", input_cmd_sensitivity },
 	{ "tap", input_cmd_tap },
 	{ "tap_button_map", input_cmd_tap_button_map },
 	{ "tool_mode", input_cmd_tool_mode },

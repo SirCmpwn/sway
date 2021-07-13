@@ -154,7 +154,7 @@ static void apply_input_type_config(struct sway_input_device *input_device) {
 	}
 }
 
-static struct sway_input_device *input_sway_device_from_wlr(
+struct sway_input_device *input_sway_device_from_wlr(
 		struct wlr_input_device *device) {
 	struct sway_input_device *input_device = NULL;
 	wl_list_for_each(input_device, &server.input->devices, link) {
