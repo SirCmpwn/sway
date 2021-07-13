@@ -2,6 +2,8 @@ option('default-wallpaper', type: 'boolean', value: true, description: 'Install 
 option('zsh-completions', type: 'boolean', value: true, description: 'Install zsh shell completions.')
 option('bash-completions', type: 'boolean', value: true, description: 'Install bash shell completions.')
 option('fish-completions', type: 'boolean', value: true, description: 'Install fish shell completions.')
+option('swaybar', type: 'boolean', value: true, description: 'Enable support for swaybar')
+option('swaynag', type: 'boolean', value: true, description: 'Enable support for swaynag')
 option('xwayland', type: 'feature', value: 'auto', description: 'Enable support for X11 applications')
 option('tray', type: 'feature', value: 'auto', description: 'Enable support for swaybar tray')
 option('gdk-pixbuf', type: 'feature', value: 'auto', description: 'Enable support for more image formats in swaybg')

@@ -140,9 +140,15 @@ if scdoc.found()
 		'sway/sway-output.5.scd',
 		'swaybar/swaybar-protocol.7.scd',
 		'swaymsg/swaymsg.1.scd',
-		'swaynag/swaynag.1.scd',
-		'swaynag/swaynag.5.scd',
 	]
+
+	if get_option('swaynag')
+		man_files += [
+			'swaynag/swaynag.1.scd',
+			'swaynag/swaynag.5.scd',
+		]
+	endif
+
 	foreach filename : man_files
 		topic = filename.split('.')[-3].split('/')[-1]
 		section = filename.split('.')[-2]
@@ -224,9 +230,15 @@ subdir('common')
 subdir('sway')
 subdir('swaymsg')
 
-subdir('client')
-subdir('swaybar')
-subdir('swaynag')
+if get_option('swaybar') or get_option('swaynag')
+	subdir('client')
+endif
+if get_option('swaybar')
+	subdir('swaybar')
+endif
+if get_option('swaynag')
+	subdir('swaynag')
+endif
 
 config = configuration_data()
 config.set('datadir', join_paths(prefix, datadir))
@@ -274,9 +286,13 @@ endif
 if get_option('bash-completions')
 	bash_files = files(
 		'completions/bash/sway',
-		'completions/bash/swaybar',
 		'completions/bash/swaymsg',
 	)
+
+	if get_option('swaybar')
+		bash_files += files('completions/bash/swaybar')
+	endif
+
 	if bash_comp.found()
 		bash_install_dir = bash_comp.get_variable(
 			pkgconfig: 'completionsdir',
@@ -293,8 +309,12 @@ if get_option('fish-completions')
 	fish_files = files(
 		'completions/fish/sway.fish',
 		'completions/fish/swaymsg.fish',
-		'completions/fish/swaynag.fish',
 	)
+
+	if get_option('swaynag')
+		fish_files += files('completions/fish/swaynag.fish')
+	endif
+
 	if fish_comp.found()
 		fish_install_dir = fish_comp.get_variable(
 			pkgconfig: 'completionsdir',
