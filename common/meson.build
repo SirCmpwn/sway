@@ -1,11 +1,9 @@
 lib_sway_common = static_library(
 	'sway-common',
 	files(
-		'background-image.c',
 		'cairo.c',
 		'ipc-client.c',
 		'log.c',
-		'loop.c',
 		'list.c',
 		'pango.c',
 		'stringop.c',
@@ -13,7 +11,6 @@ lib_sway_common = static_library(
 	),
 	dependencies: [
 		cairo,
-		gdk_pixbuf,
 		pango,
 		pangocairo,
 		wayland_client.partial_dependency(compile_args: true)
