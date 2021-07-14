@@ -32,6 +32,24 @@ static struct cmd_results *do_split(int layout) {
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
+static struct cmd_results *do_unsplit() {
+	struct sway_container *con = config->handler_context.container;
+	struct sway_workspace *ws = config->handler_context.workspace;
+
+	if (con && con->parent && con->parent->children->length == 1) {
+		container_flatten(con->parent);
+	} else {
+		return cmd_results_new(CMD_FAILURE, "Can only flatten a child container with no siblings");
+	}
+
+	if (root->fullscreen_global) {
+		arrange_root();
+	} else {
+		arrange_workspace(ws);
+	}
+	return cmd_results_new(CMD_SUCCESS, NULL);
+}
+
 struct cmd_results *cmd_split(int argc, char **argv) {
 	struct cmd_results *error = NULL;
 	if ((error = checkarg(argc, "split", EXPECTED_EQUAL_TO, 1))) {
@@ -55,6 +73,9 @@ struct cmd_results *cmd_split(int argc, char **argv) {
 		} else {
 			return do_split(L_VERT);
 		}
+	} else if (strcasecmp(argv[0], "n") == 0 ||
+			strcasecmp(argv[0], "none") == 0) {
+		return do_unsplit();
 	} else {
 		return cmd_results_new(CMD_FAILURE,
 			"Invalid split command (expected either horizontal or vertical).");
