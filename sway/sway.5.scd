@@ -768,6 +768,10 @@ The default colors are:
 	to _yes_, the marks will be shown on the _left_ side instead of the
 	_right_ side.
 
+
+*titlebar_position* top|bottom
+	Sets the titlebar position.
+
 *unbindswitch* <switch>:<state>
 	Removes a binding for when <switch> changes to <state>.
 

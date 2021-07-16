@@ -261,6 +261,16 @@ void view_autoconfigure(struct sway_view *view) {
 	con->pending.border_top = con->pending.border_bottom = true;
 	con->pending.border_left = con->pending.border_right = true;
 	double y_offset = 0;
+	double height_offset = 0;
+	bool titlebar_visible = con->pending.border == B_NORMAL;
+	bool titlebar_is_on_top = config->titlebar_position == TITLEBAR_TOP;
+	bool titlebar_is_visible_on_top = titlebar_is_on_top && titlebar_visible;
+	bool titlebar_is_visible_on_bottom = !titlebar_is_on_top && titlebar_visible;
+	if (titlebar_is_visible_on_top) {
+		con->pending.border_top = false;
+	} else if (titlebar_is_visible_on_bottom) {
+		con->pending.border_bottom = false;
+	}
 
 	if (!container_is_floating_or_child(con) && ws) {
 		if (config->hide_edge_borders == E_BOTH
@@ -272,9 +282,9 @@ void view_autoconfigure(struct sway_view *view) {
 
 		if (config->hide_edge_borders == E_BOTH
 				|| config->hide_edge_borders == E_HORIZONTAL) {
-			con->pending.border_top = con->pending.y != ws->y;
+			con->pending.border_top &= con->pending.y != ws->y;
 			int bottom_y = con->pending.y + con->pending.height;
-			con->pending.border_bottom = bottom_y != ws->y + ws->height;
+			con->pending.border_bottom &= bottom_y != ws->y + ws->height;
 		}
 
 		bool smart = config->hide_edge_borders_smart == ESMART_ON ||
@@ -299,13 +309,25 @@ void view_autoconfigure(struct sway_view *view) {
 		if (show_titlebar) {
 			enum sway_container_layout layout = container_parent_layout(con);
 			if (layout == L_TABBED) {
-				y_offset = container_titlebar_height();
-				con->pending.border_top = false;
+				height_offset = container_titlebar_height();
+				if (titlebar_is_on_top) {
+					con->pending.border_top = false;
+				} else {
+					con->pending.border_bottom = false;
+				}
 			} else if (layout == L_STACKED) {
-				y_offset = container_titlebar_height() * siblings->length;
-				con->pending.border_top = false;
+				height_offset = container_titlebar_height() * siblings->length;
+				if (titlebar_is_on_top) {
+					con->pending.border_top = false;
+				} else {
+					con->pending.border_bottom = false;
+				}
 			}
 		}
+	}
+
+	if (titlebar_visible && titlebar_is_visible_on_top) {
+		y_offset = height_offset;
 	}
 
 	double x, y, width, height;
@@ -316,7 +338,7 @@ void view_autoconfigure(struct sway_view *view) {
 		x = con->pending.x;
 		y = con->pending.y + y_offset;
 		width = con->pending.width;
-		height = con->pending.height - y_offset;
+		height = con->pending.height - height_offset;
 		break;
 	case B_PIXEL:
 		x = con->pending.x + con->pending.border_thickness * con->pending.border_left;
@@ -324,7 +346,7 @@ void view_autoconfigure(struct sway_view *view) {
 		width = con->pending.width
 			- con->pending.border_thickness * con->pending.border_left
 			- con->pending.border_thickness * con->pending.border_right;
-		height = con->pending.height - y_offset
+		height = con->pending.height - height_offset
 			- con->pending.border_thickness * con->pending.border_top
 			- con->pending.border_thickness * con->pending.border_bottom;
 		break;
@@ -334,14 +356,17 @@ void view_autoconfigure(struct sway_view *view) {
 		width = con->pending.width
 			- con->pending.border_thickness * con->pending.border_left
 			- con->pending.border_thickness * con->pending.border_right;
-		if (y_offset) {
+		if (y_offset || height_offset) {
 			y = con->pending.y + y_offset;
-			height = con->pending.height - y_offset
+			height = con->pending.height - height_offset
 				- con->pending.border_thickness * con->pending.border_bottom;
 		} else {
-			y = con->pending.y + container_titlebar_height();
+			y = con->pending.y;
+			if (titlebar_is_visible_on_top) {
+				y += container_titlebar_height();
+			}
 			height = con->pending.height - container_titlebar_height()
-				- con->pending.border_thickness * con->pending.border_bottom;
+				- con->pending.border_thickness * (con->pending.border_bottom || con->pending.border_top);
 		}
 		break;
 	}

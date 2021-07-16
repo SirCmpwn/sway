@@ -896,14 +896,19 @@ void container_set_geometry_from_content(struct sway_container *con) {
 
 	if (con->pending.border != B_CSD && !con->pending.fullscreen_mode) {
 		border_width = con->pending.border_thickness * (con->pending.border != B_NONE);
-		top = con->pending.border == B_NORMAL ?
-			container_titlebar_height() : border_width;
+		top = con->pending.border == B_NORMAL
+			&& (config->titlebar_position != TITLEBAR_BOTTOM)
+			? container_titlebar_height()
+			: border_width;
 	}
 
 	con->pending.x = con->pending.content_x - border_width;
 	con->pending.y = con->pending.content_y - top;
 	con->pending.width = con->pending.content_width + border_width * 2;
 	con->pending.height = top + con->pending.content_height + border_width;
+	if (config->titlebar_position == TITLEBAR_BOTTOM) {
+		con->pending.height += container_titlebar_height() - border_width;
+	}
 	node_set_dirty(&con->node);
 }
 
