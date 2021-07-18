@@ -8,6 +8,7 @@
 #include <wlr/types/wlr_tablet_tool.h>
 #include <wlr/util/box.h>
 #include <xkbcommon/xkbcommon.h>
+#include <xf86drmMode.h>
 #include "../include/config.h"
 #include "list.h"
 #include "swaynag.h"
@@ -257,6 +258,7 @@ struct output_config {
 	int width, height;
 	float refresh_rate;
 	int custom_mode;
+	drmModeModeInfo drm_mode;
 	int x, y;
 	float scale;
 	enum scale_filter_mode scale_filter;

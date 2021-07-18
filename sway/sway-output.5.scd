@@ -34,11 +34,16 @@ must be separated by one space. For example:
 	*--custom*. You should probably only use this if you know what you're
 	doing.
 
+	Custom modeline is also supported on DRM backend. It can be generated
+	using cvt and gtf commands. See *xorg.conf*(5).
+
 	Examples:
 
 		output HDMI-A-1 mode 1920x1080
 
 		output HDMI-A-1 mode 1920x1080@60Hz
+
+		output HDMI-A-1 mode 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync
 
 *output* <name> position|pos <X> <Y>
 	Places the specified output at the specific position in the global
