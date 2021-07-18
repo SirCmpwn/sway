@@ -8,6 +8,7 @@
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/backend/drm.h>
 #include "sway/config.h"
 #include "sway/input/cursor.h"
 #include "sway/output.h"
@@ -98,6 +99,9 @@ void merge_output_config(struct output_config *dst, struct output_config *src) {
 	}
 	if (src->custom_mode != -1) {
 		dst->custom_mode = src->custom_mode;
+	}
+	if (src->drm_mode.hdisplay) {
+		memcpy(&dst->drm_mode, &src->drm_mode, sizeof(src->drm_mode));
 	}
 	if (src->transform != -1) {
 		dst->transform = src->transform;
@@ -236,11 +240,20 @@ struct output_config *store_output_config(struct output_config *oc) {
 }
 
 static void set_mode(struct wlr_output *output, int width, int height,
-		float refresh_rate, bool custom) {
+		float refresh_rate, bool custom, drmModeModeInfo *drm_mode) {
 	// Not all floating point integers can be represented exactly
 	// as (int)(1000 * mHz / 1000.f)
 	// round() the result to avoid any error
 	int mhz = (int)round(refresh_rate * 1000);
+
+	if (drm_mode && wlr_output_is_drm(output)) {
+		sway_log(SWAY_DEBUG, "Assigning custom modeline to %s", output->name);
+		struct wlr_output_mode *mode = wlr_drm_connector_add_mode(output, drm_mode);
+		if (mode) {
+			wlr_output_set_mode(output, mode);
+			return;
+		}
+	}
 
 	if (wl_list_empty(&output->modes) || custom) {
 		sway_log(SWAY_DEBUG, "Assigning custom mode to %s", output->name);
@@ -355,7 +368,8 @@ static void queue_output_config(struct output_config *oc,
 		sway_log(SWAY_DEBUG, "Set %s mode to %dx%d (%f Hz)",
 			wlr_output->name, oc->width, oc->height, oc->refresh_rate);
 		set_mode(wlr_output, oc->width, oc->height,
-			oc->refresh_rate, oc->custom_mode == 1);
+			oc->refresh_rate, oc->custom_mode == 1,
+			oc->drm_mode.hdisplay ? &oc->drm_mode : NULL);
 	} else if (!wl_list_empty(&wlr_output->modes)) {
 		struct wlr_output_mode *mode = wlr_output_preferred_mode(wlr_output);
 		wlr_output_set_mode(wlr_output, mode);
