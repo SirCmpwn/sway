@@ -137,10 +137,16 @@ static void render_surface_iterator(struct sway_output *output,
 	struct wlr_output *wlr_output = output->wlr_output;
 	pixman_region32_t *output_damage = data->damage;
 	float alpha = data->alpha;
+	struct wlr_renderer *renderer =
+		wlr_backend_get_renderer(wlr_output->backend);
 
 	struct wlr_texture *texture = wlr_surface_get_texture(surface);
 	if (!texture) {
 		return;
+	}
+
+	if (surface->buffer->base.in_fence_fd >= 0) {
+		wlr_renderer_wait_in_fence(renderer, surface->buffer->base.in_fence_fd);
 	}
 
 	struct wlr_fbox src_box;
@@ -168,6 +174,8 @@ static void render_surface_iterator(struct sway_output *output,
 
 	wlr_presentation_surface_sampled_on_output(server.presentation, surface,
 		wlr_output);
+
+	list_add(output->textured_buffers, &surface->buffer->base);
 }
 
 static void render_layer_toplevel(struct sway_output *output,
@@ -1033,6 +1041,7 @@ void output_render(struct sway_output *output, struct timespec *when,
 	}
 
 	wlr_renderer_begin(renderer, wlr_output->width, wlr_output->height);
+	output->textured_buffers->length = 0;
 
 	if (!pixman_region32_not_empty(damage)) {
 		// Output isn't damaged but needs buffer swap
@@ -1133,6 +1142,17 @@ renderer_end:
 	wlr_renderer_scissor(renderer, NULL);
 	wlr_output_render_software_cursors(wlr_output, damage);
 	wlr_renderer_end(renderer);
+
+	// TODO: software cursors
+	int fence_fd = wlr_renderer_dup_out_fence(renderer);
+	if (fence_fd >= 0) {
+		for (int i = 0; i < output->textured_buffers->length; i++) {
+			struct wlr_buffer *buffer = output->textured_buffers->items[i];
+			wlr_buffer_add_out_fence(buffer, fence_fd);
+		}
+		close(fence_fd);
+	}
+	output->textured_buffers->length = 0;
 
 	int width, height;
 	wlr_output_transformed_resolution(wlr_output, &width, &height);

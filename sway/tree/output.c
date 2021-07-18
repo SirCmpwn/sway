@@ -107,6 +107,8 @@ struct sway_output *output_create(struct wlr_output *wlr_output) {
 		wl_list_init(&output->layers[i]);
 	}
 
+	output->textured_buffers = create_list();
+
 	return output;
 }
 
@@ -240,6 +242,7 @@ void output_destroy(struct sway_output *output) {
 	}
 	list_free(output->workspaces);
 	list_free(output->current.workspaces);
+	list_free(output->textured_buffers);
 	wl_event_source_remove(output->repaint_timer);
 	free(output);
 }
