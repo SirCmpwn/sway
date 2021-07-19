@@ -780,8 +780,6 @@ static void seat_configure_pointer(struct sway_seat *seat,
 	wlr_cursor_attach_input_device(seat->cursor->cursor,
 		sway_device->input_device->wlr_device);
 	seat_apply_input_config(seat, sway_device);
-	wl_event_source_timer_update(
-			seat->cursor->hide_source, cursor_get_timeout(seat->cursor));
 }
 
 static void seat_configure_keyboard(struct sway_seat *seat,
@@ -880,6 +878,9 @@ void seat_configure_device(struct sway_seat *seat,
 		case WLR_INPUT_DEVICE_TABLET_PAD:
 			seat_configure_tablet_pad(seat, seat_device);
 			break;
+	}
+	if (wlr_cursor_is_input_device_attached(seat->cursor->cursor, input_device->wlr_device)) {
+		cursor_handle_activity(seat->cursor, input_device->wlr_device);
 	}
 }
 
