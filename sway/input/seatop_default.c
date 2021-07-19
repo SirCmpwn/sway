@@ -710,7 +710,7 @@ static void handle_pointer_axis(struct sway_seat *seat,
 				seat_get_active_tiling_child(seat, tabcontainer);
 			list_t *siblings = container_get_siblings(cont);
 			int desired = list_find(siblings, active->sway_container) +
-				round(scroll_factor * event->delta_discrete);
+				event->delta_discrete;
 			if (desired < 0) {
 				desired = 0;
 			} else if (desired >= siblings->length) {
