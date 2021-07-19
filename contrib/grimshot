@@ -13,10 +13,10 @@
 ## See `man 1 grimshot` or `grimshot usage` for further details.
 
 getTargetDirectory() {
-  test -f ${XDG_CONFIG_HOME:-~/.config}/user-dirs.dirs && \
-    . ${XDG_CONFIG_HOME:-~/.config}/user-dirs.dirs
+  test -f "${XDG_CONFIG_HOME:-~/.config}/user-dirs.dirs" && \
+    . "${XDG_CONFIG_HOME:-~/.config}/user-dirs.dirs"
 
-  echo ${XDG_SCREENSHOTS_DIR:-${XDG_PICTURES_DIR:-$HOME}}
+  echo "${XDG_SCREENSHOTS_DIR:-${XDG_PICTURES_DIR:-$HOME}}"
 }
 
 if [ "$1" = "--notify" ]; then
@@ -26,13 +26,24 @@ else
   NOTIFY=no
 fi
 
+if [ "$1" = "--cursor" ]; then
+  CURSOR="-c"
+  shift 1
+fi
+
+
+if [ "$1" = "--notify" ] && [ "$NOTIFY" = "no" ]; then
+  NOTIFY=yes
+  shift 1
+fi
+
 ACTION=${1:-usage}
 SUBJECT=${2:-screen}
 FILE=${3:-$(getTargetDirectory)/$(date -Ins).png}
 
 if [ "$ACTION" != "save" ] && [ "$ACTION" != "copy" ] && [ "$ACTION" != "check" ]; then
   echo "Usage:"
-  echo "  grimshot [--notify] (copy|save) [active|screen|output|area|window] [FILE|-]"
+  echo "  grimshot [--notify] [--cursor] (copy|save) [active|screen|output|area|window] [FILE|-]"
   echo "  grimshot check"
   echo "  grimshot usage"
   echo ""
@@ -67,7 +78,7 @@ notifyError() {
     MESSAGE=${1:-"Error taking screenshot with grim"}
     notify -u critical "$TITLE" "$MESSAGE"
   else
-    echo $1
+    echo "$1"
   fi
 }
 
@@ -91,12 +102,12 @@ takeScreenshot() {
   FILE=$1
   GEOM=$2
   OUTPUT=$3
-  if [ ! -z "$OUTPUT" ]; then
-    grim -o "$OUTPUT" "$FILE" || die "Unable to invoke grim"
+  if [ -n "$OUTPUT" ]; then
+    grim $CURSOR -o "$OUTPUT" "$FILE" || die "Unable to invoke grim"
   elif [ -z "$GEOM" ]; then
-    grim "$FILE" || die "Unable to invoke grim"
+    grim $CURSOR "$FILE" || die "Unable to invoke grim"
   else
-    grim -g "$GEOM" "$FILE" || die "Unable to invoke grim"
+    grim $CURSOR -g "$GEOM" "$FILE" || die "Unable to invoke grim"
   fi
 }
 
@@ -147,7 +158,7 @@ else
     TITLE="Screenshot of $SUBJECT"
     MESSAGE=$(basename "$FILE")
     notifyOk "$MESSAGE" "$TITLE"
-    echo $FILE
+    echo "$FILE"
   else
     notifyError "Error taking screenshot with grim"
   fi

@@ -6,7 +6,7 @@ grimshot - a helper for screenshots within sway
 
 # SYNOPSIS
 
-*grimshot* [--notify] (copy|save) [TARGET] [FILE]++
+*grimshot* [--notify] [--cursor] (copy|save) [TARGET] [FILE]++
 *grimshot* check++
 *grimshot* usage
 
@@ -14,6 +14,9 @@ grimshot - a helper for screenshots within sway
 
 *--notify*
 	Show notifications to the user that a screenshot has been taken.
+
+*--cursor*
+	Include cursors in the screenshot.
 
 *save*
 	Save the screenshot into a regular file. Grimshot will write images
