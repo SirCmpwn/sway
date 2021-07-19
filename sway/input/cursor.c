@@ -507,7 +507,7 @@ static void handle_touch_up(struct wl_listener *listener, void *data) {
 
 	if (cursor->simulating_pointer_from_touch) {
 		if (cursor->pointer_touch_id == cursor->seat->touch_id) {
-			cursor->simulating_pointer_from_touch = false;
+			cursor->pointer_touch_up = true;
 			dispatch_cursor_button(cursor, event->device, event->time_msec,
 					BTN_LEFT, WLR_BUTTON_RELEASED);
 		}
@@ -565,6 +565,11 @@ static void handle_touch_frame(struct wl_listener *listener, void *data) {
 
 	if (cursor->simulating_pointer_from_touch) {
 		wlr_seat_pointer_notify_frame(wlr_seat);
+
+		if (cursor->pointer_touch_up) {
+			cursor->pointer_touch_up = false;
+			cursor->simulating_pointer_from_touch = false;
+		}
 	} else {
 		wlr_seat_touch_notify_frame(wlr_seat);
 	}
